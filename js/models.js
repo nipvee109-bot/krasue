@@ -83,6 +83,19 @@ K.krasueModel = function(){
   eyes(g, .015, -.18, .055, .07);
   return {g, head, guts, tubes, aura, kind:'krasue', yOff:-.15};
 };
+/* the ผีปอบ's face: an old woman's hide, deep sockets, a mouth that splits too wide */
+const popFaceTex = K.canvasTex(64,64,(g)=>{
+  const gr = g.createRadialGradient(32,44,4,32,32,40); gr.addColorStop(0,'#7c6250'); gr.addColorStop(.6,'#5a4636'); gr.addColorStop(1,'#2a1f18');
+  g.fillStyle = gr; g.fillRect(0,0,64,64);
+  g.strokeStyle='rgba(20,12,8,.55)'; g.lineWidth=1;
+  for(let i=0;i<40;i++){ const x=Math.random()*64, y=Math.random()*64, l=4+Math.random()*10; g.beginPath(); g.moveTo(x,y); g.quadraticCurveTo(x+l/2,y+(Math.random()-.5)*3,x+l,y+(Math.random()-.5)*2); g.stroke(); }
+  for(const x of [17,47]){ const s=g.createRadialGradient(x,26,1,x,26,10); s.addColorStop(0,'rgba(0,0,0,1)'); s.addColorStop(1,'rgba(0,0,0,0)'); g.fillStyle=s; g.beginPath(); g.ellipse(x,26,11,8,0,0,7); g.fill(); }
+  g.strokeStyle='rgba(0,0,0,.8)'; g.lineWidth=2.5; g.beginPath(); g.moveTo(5,15); g.lineTo(27,21); g.moveTo(59,15); g.lineTo(37,21); g.stroke();   // scowl
+  g.fillStyle='#1c120c'; g.fillRect(29,33,2,3); g.fillRect(34,33,2,3);
+  g.fillStyle='#120404'; g.beginPath(); g.moveTo(6,42); g.quadraticCurveTo(32,62,58,42); g.quadraticCurveTo(32,48,6,42); g.fill();
+  g.fillStyle='#d8cca6';
+  for(let x=9;x<56;x+=4){ if(Math.random()<.15) continue; const e=42+3*(1-Math.pow((x-32)/26,2)); g.beginPath(); g.moveTo(x,e); g.lineTo(x+3,e); g.lineTo(x+1.5,e+3+Math.random()*4); g.fill(); }
+});
 K.popModel = function(){
   const g = new THREE.Group();
   const skin = flat(0x5a4a3c), fur = MAT.fur, dark = flat(0x1a1410), gum = flat(0x4a1414);
@@ -93,8 +106,8 @@ K.popModel = function(){
   for(let i=0;i<6;i++){ const t=new THREE.Mesh(boxGeo(.08,mr(.3,.5),.08), fur); t.position.set(mr(-.4,.4),mr(.4,1.1),.38); t.rotation.x=-mr(.2,.8); body.add(t); }
   const head = new THREE.Group(); head.position.set(0,1.0,-.42); head.rotation.x = .75; body.add(head);
   const skull = new THREE.Mesh(boxGeo(.46,.42,.42), skin); head.add(skull);
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(.46,.42), new THREE.MeshPhongMaterial({map:popFaceTex, flatShading:true, shininess:0})); face.position.z=-.212; face.rotation.y=Math.PI; head.add(face);
   const jaw = new THREE.Mesh(boxGeo(.4,.12,.34), gum); jaw.position.set(0,-.28,-.06); jaw.rotation.x=.35; head.add(jaw);
-  for(let i=0;i<6;i++){ const t=new THREE.Mesh(boxGeo(.03,.08,.02), flat(0xd8d0b0)); t.position.set(-.15+i*.06,-.19,-.22); head.add(t); }
   const hair = new THREE.Mesh(boxGeo(.56,.28,.56), fur); hair.position.set(0,.22,.05); head.add(hair);
   for(let i=0;i<7;i++){ const h=new THREE.Mesh(boxGeo(.05,mr(.3,.6),.05), fur); h.position.set(mr(-.25,.25),-.1,mr(-.05,.25)); head.add(h); }
   eyes(head, .04, -.22, .11, .16);
