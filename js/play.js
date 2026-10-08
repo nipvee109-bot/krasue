@@ -351,7 +351,7 @@ function morphing(v, t){
 }
 
 /* ---------- world ---------- */
-const DAWN_COL = new THREE.Color(0x2a3550), tmpC = new THREE.Color();
+const DAWN_COL = new THREE.Color(0x2a3550), DANGER_COL = new THREE.Color(0x1d0b10), tmpC = new THREE.Color();
 K.updateWorld = function(dt){
   const t = K.gameTime;
   K.ALTARS[0] && (K.ALTARS[0].ember.material.opacity = .3+Math.sin(t*1.7)*.12);   // shared material: one pulse for all
@@ -360,10 +360,15 @@ K.updateWorld = function(dt){
     let f=1+Math.sin(t*13+c.i)*.08+Math.sin(t*7.3+c.i*2)*.06;
     for(const w of R.wisps) if(Math.hypot(w.x-c.x,w.z-c.z)<6) f *= Math.random()<.5 ? .15 : 1.3;
     c.altar.flame.scale.y=f;
-    K.lightSource(c.x-.15,1.15,c.z,0xff9a40,1.4*f,7);
+    K.lightSource(c.x-.15,1.15,c.z,0xff9440,1.7*f,8);
   }
-  if(R.offers.some(o=>o.placed)) K.lightSource(K.SHRINE.x,2,K.SHRINE.z+.4,0xffc070,.9+Math.sin(t*5)*.1,5);
+  // an unlit altar breathes a little ember light, so the job is findable without a torch
+  for(const c of R.cand) if(!c.lit) K.lightSource(c.x+.18,1,c.z,0xff7a30,.3+Math.sin(t*1.7+c.i)*.08,3.2);
+  // the spirit house keeps a small oil lamp burning; offerings placed make it glow
+  { const n = R.offers.filter(o=>o.placed).length, fl = 1+Math.sin(t*5)*.06+Math.sin(t*11.3)*.04;
+    K.lightSource(K.SHRINE.x,1.9,K.SHRINE.z+.5,0xffb060,(.5+n*.35)*fl,4.5+n); }
   if(K.GATE.open) K.lightSource(0, 2.4, 25.6, 0xbccaff, 1.5+Math.sin(t*2)*.2, 10);   // cold light of the road outside: the way out
+  else K.lightSource(0, 2.8, 23.2, 0x7d93bf, .45, 6);   // the closed gate: a pale patch to steer for
   if(K.GATE.open && K.GATE.a<1){ K.GATE.a = Math.min(1, K.GATE.a+dt*.5); for(const d of K.GATE.doors) d.pivot.rotation.y = d.s*K.GATE.a*1.75; }
   for(const b of K.BAT) if(b.up) b.mesh.rotation.y += dt*1.5;
   for(const c of R.charms) if(c.up) c.g.children[0].rotation.y += dt*1.2;
@@ -373,6 +378,7 @@ K.updateWorld = function(dt){
   if(G.inGame && G.role!=='ghost' && K.baseFog!=null){
     const k = clamp(1-G.left/90, 0, 1);
     tmpC.setHex(K.baseFog).lerp(DAWN_COL, k*.85);
+    if(K.fear>0) tmpC.lerp(DANGER_COL, K.fear*.45);
     K.scene.fog.color.copy(tmpC); K.scene.background.copy(tmpC);
     K.stars.material.opacity = 1-k*.8;
   }

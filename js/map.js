@@ -312,4 +312,6 @@ K.lookPoint = function(origin, dir, far){
   const hit = ray.intersectObjects(occluders.concat([K.ground]), false)[0];
   return hit ? hit.point : origin.clone().addScaledVector(dir, far||25);
 };
+K.markShadows(world); K.ground.castShadow = false;
+K.setShadows(!!K.QUAL[K.QUALITY].shadows);
 })(window.K);

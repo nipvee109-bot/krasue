@@ -65,11 +65,19 @@ const mistTex = K.canvasTex(64,64,(g)=>{
 mistTex.magFilter = THREE.LinearFilter; mistTex.minFilter = THREE.LinearFilter;
 const MIST = [];
 for(let i=0;i<36;i++){
-  const m = new THREE.Sprite(new THREE.SpriteMaterial({map:mistTex, color:0x9aa6ba, transparent:true, opacity:R(.2,.32), depthWrite:false}));
+  const m = new THREE.Sprite(new THREE.SpriteMaterial({map:mistTex, color:0x93a3bd, transparent:true, opacity:R(.18,.28), depthWrite:false}));
   m.position.set(R(-22,22), R(.25,.6), R(-22,22)); const s=R(5,9); m.scale.set(s, s*.32, 1);
   m.material.rotation = R(0,6);
   m.userData = {vx:R(-.12,.12), vz:R(-.08,.08), base:m.material.opacity};
   scene.add(m); MIST.push(m);
+}
+const GRAVE_MIST = [];
+for(let i=0;i<9;i++){
+  const m = new THREE.Sprite(new THREE.SpriteMaterial({map:mistTex, color:0x8fa8a4, transparent:true, opacity:K.mr(.24,.36), depthWrite:false}));
+  m.position.set(K.mr(8,20.5), K.mr(.2,.45), K.mr(8,17.5)); const s=K.mr(4,6.5); m.scale.set(s, s*.3, 1);
+  m.material.rotation = K.mr(0,6);
+  m.userData = {ph:K.mr(0,6), x:m.position.x, z:m.position.z};
+  scene.add(m); GRAVE_MIST.push(m);
 }
 /* ---------- ผีพราย: will-o'-wisps drifting over the graves ---------- */
 const wispMat = new THREE.SpriteMaterial({map:K.glowTex(120,200,255), transparent:true, blending:THREE.AdditiveBlending, depthWrite:false});
@@ -336,6 +344,8 @@ K.updateAmbience = function(dt){
     if(dx*dx+dz*dz>17*17){ const a = Math.random()*Math.PI*2, r = mr(6,16); m.position.x = cx+Math.cos(a)*r; m.position.z = cz+Math.sin(a)*r; }
     m.material.rotation += dt*.02;
   });
+  const ng = K.QUALITY==='low' ? 4 : 9;
+  GRAVE_MIST.forEach((m,i)=>{ m.visible = i<ng; if(!m.visible) return; const u = m.userData; m.position.x = u.x+Math.sin(t*.13+u.ph)*1.2; m.position.z = u.z+Math.cos(t*.11+u.ph)*.8; m.material.rotation += dt*.015; });
   for(const w of WISPS){ const a = t*w.sp+w.ph; w.s.position.set(w.cx+Math.cos(a)*w.r, w.y+Math.sin(t*1.3+w.ph)*.25, w.cz+Math.sin(a*1.3)*w.r); w.s.material.opacity = .5+.5*Math.sin(t*3+w.ph); }
   // lightning
   LT.next -= dt;
@@ -359,7 +369,7 @@ K.updateAmbience = function(dt){
   }
   K.fear += (fear-K.fear)*Math.min(1,dt*3);
   dread.style.opacity = (K.fear*.85*(.85+.15*Math.sin(t*7))).toFixed(3);
-  grainEl.style.opacity = (.05 + K.fear*.13).toFixed(3);
+  grainEl.style.opacity = (.032 + K.fear*.12).toFixed(3);
   if(G.inGame) updateFigure(dt); else if(fig.g.visible) fig.g.visible = false;
   updateDolls(dt); updateCoffin(dt); updateCrows(dt);
 };

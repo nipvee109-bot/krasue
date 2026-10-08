@@ -6,7 +6,7 @@ const {$, mr} = K;
 K.QUAL = {
   low:{scale:.26, grain:false, beams:false, lights:3, fog:1.08},
   medium:{scale:.46, grain:true, beams:true, lights:6, fog:1},
-  high:{scale:.7, grain:true, beams:true, lights:8, fog:1}
+  high:{scale:.7, grain:true, beams:true, lights:8, fog:1, shadows:true}
 };
 let q = K.params.get('quality');
 if(!K.QUAL[q]) q = K.store.get('quality', null);
@@ -18,8 +18,8 @@ const canvas = K.canvas = $('#game');
 const renderer = K.renderer = new THREE.WebGLRenderer({canvas, antialias:false, powerPreference:'high-performance'});
 renderer.setPixelRatio(1);
 const scene = K.scene = new THREE.Scene();
-scene.background = new THREE.Color(0x04060a);
-scene.fog = new THREE.FogExp2(0x04060a, .075);
+scene.background = new THREE.Color(0x0b1119);
+scene.fog = new THREE.FogExp2(0x0b1119, .06);
 const camera = K.camera = new THREE.PerspectiveCamera(72, 1, .05, 70);
 camera.rotation.order = 'YXZ';
 scene.add(camera);
@@ -50,7 +50,7 @@ K.setQuality = function(name, auto){
   if(!K.QUAL[name]) return;
   K.QUALITY = name; bench.done = true;
   if(!auto){ K.store.set('quality', name); qAuto = false; K.store.set('qAuto', false); }
-  K.resize(); K.setLightPool(K.QUAL[name].lights);
+  K.resize(); K.setLightPool(K.QUAL[name].lights); K.setShadows(!!K.QUAL[name].shadows);
   K.$$('.qbtns button').forEach(b=>b.setAttribute('aria-checked', b.dataset.q===name));
 };
 
@@ -147,8 +147,25 @@ K.glowTex = function(r,g,b){
 /* ---------- lights ----------
    Point lights are expensive per pixel, so the world asks for light "sources" each frame
    and a small pool of real PointLights (3/6/8 by quality) is given to the nearest ones. */
-K.amb = new THREE.AmbientLight(0x1b2436,.55); scene.add(K.amb);
-K.moonLight = new THREE.DirectionalLight(0x8ea4c2,.3); K.moonLight.position.set(-26,26,-40); scene.add(K.moonLight);
+/* the night's palette: a cold moonlit sky over warm-dark earth, and a blue-grey fog that things fade into
+   (not black: distant buildings read as dark shapes against it). setVision() applies it for survivors. */
+K.NIGHT = {sky:0x31415f, ground:0x17160f, amb:.62, fog:0x0b1119, fogD:.06, moon:0xa3b6d6, moonI:.62};
+K.amb = new THREE.HemisphereLight(K.NIGHT.sky, K.NIGHT.ground, K.NIGHT.amb); scene.add(K.amb);
+/* the moon: one clear direction (from the north-west, where the moon hangs in the sky) so walls have a lit and a dark side */
+K.moonLight = new THREE.DirectionalLight(K.NIGHT.moon, K.NIGHT.moonI); K.moonLight.position.set(-26,26,-40); scene.add(K.moonLight); scene.add(K.moonLight.target);
+/* moon shadows, on high only: one 1024² map covering ~32 m around the camera, re-centred as you move.
+   Only the static temple casts (marked once the map is built); point lights and torches never cast. */
+{
+  const sh = K.moonLight.shadow; sh.mapSize.set(1024,1024); sh.bias = -.0015; sh.normalBias = .02;
+  const c = sh.camera; c.left = c.bottom = -16; c.right = c.top = 16; c.near = 5; c.far = 95; c.updateProjectionMatrix();
+}
+const MOON_DIR = new THREE.Vector3(-26,26,-40).normalize();
+K.setShadows = function(on){
+  if(renderer.shadowMap.enabled===on) return;
+  renderer.shadowMap.enabled = on; renderer.shadowMap.type = THREE.PCFShadowMap; K.moonLight.castShadow = on;
+  scene.traverse(o=>{ for(const m of o.material ? [].concat(o.material) : []) m.needsUpdate = true; });   // shaders pick shadows up or drop them
+};
+K.markShadows = function(root){ root.traverse(o=>{ if(o.isMesh && !o.material.transparent){ o.castShadow = true; o.receiveShadow = true; } }); };
 const pool = [];
 K.setLightPool = function(n){
   while(pool.length<n){ const l=new THREE.PointLight(0xff9a40,0,7,1.6); scene.add(l); pool.push(l); }
@@ -159,6 +176,10 @@ const sources = [];
 K.lightSource = (x,y,z,color,intensity,dist) => { sources.push({x,y,z,color,intensity,dist:dist||7}); };
 K.flushLights = function(){
   const c = camera.position;
+  if(renderer.shadowMap.enabled){   // keep the shadow box on the player, snapped so edges don't crawl as you walk
+    const sx = Math.round(c.x*2)/2, sz = Math.round(c.z*2)/2;
+    K.moonLight.target.position.set(sx,0,sz); K.moonLight.position.set(sx+MOON_DIR.x*50, MOON_DIR.y*50, sz+MOON_DIR.z*50);
+  }
   for(const s of sources) s.d = (s.x-c.x)**2+(s.z-c.z)**2 - s.intensity*4;
   sources.sort((a,b)=>a.d-b.d);
   for(let i=0;i<pool.length;i++){

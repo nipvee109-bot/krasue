@@ -163,8 +163,8 @@ K.setVision = function(){
   const role = G.inGame ? G.role : null;
   if(role==='ghost' && !G.disg){
     const pret = G.gk==='pret';
-    K.amb.color.set(0x6a3a3a); K.amb.intensity=1.25; scene.fog.color.set(0x140404); scene.fog.density = pret ? .034 : .045; scene.background.set(0x140404); K.moonLight.intensity=.5;
-  } else { K.amb.color.set(0x1b2436); K.amb.intensity=.55; scene.fog.color.set(0x04060a); scene.fog.density=.075*K.QUAL[K.QUALITY].fog; scene.background.set(0x04060a); K.moonLight.intensity=.38; }
+    K.amb.color.set(0x6a3a3a); K.amb.groundColor.set(0x6a3a3a); K.amb.intensity=1.25; scene.fog.color.set(0x140404); scene.fog.density = pret ? .034 : .045; scene.background.set(0x140404); K.moonLight.intensity=.5;
+  } else { const N = K.NIGHT; K.amb.color.set(N.sky); K.amb.groundColor.set(N.ground); K.amb.intensity=N.amb; scene.fog.color.set(N.fog); scene.fog.density=N.fogD*K.QUAL[K.QUALITY].fog; scene.background.set(N.fog); K.moonLight.intensity=N.moonI; }
   K.baseFog = scene.fog.color.getHex(); K.baseFogD = scene.fog.density;
   K.ambBase = K.amb.intensity; K.moonBase = K.moonLight.intensity;
 };
