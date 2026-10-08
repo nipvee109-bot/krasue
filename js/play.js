@@ -292,6 +292,8 @@ K.updateRemotes = function(dt){
 const DAWN_COL = new THREE.Color(0x2a3550), tmpC = new THREE.Color();
 K.updateWorld = function(dt){
   const t = K.gameTime;
+  K.ALTARS[0] && (K.ALTARS[0].ember.material.opacity = .3+Math.sin(t*1.7)*.12);   // shared material: one pulse for all
+  for(const c of R.cand) c.altar.ember.visible = !c.lit;
   for(const c of R.cand) if(c.lit){
     let f=1+Math.sin(t*13+c.i)*.08+Math.sin(t*7.3+c.i*2)*.06;
     for(const w of R.wisps) if(Math.hypot(w.x-c.x,w.z-c.z)<6) f *= Math.random()<.5 ? .15 : 1.3;

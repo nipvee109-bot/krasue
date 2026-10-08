@@ -143,6 +143,7 @@ K.pause = function(){ if(!G.inGame || G.ended) return; L.menu = true; for(const 
 K.resume = function(){ K.audioInit(); L.menu=false; K.show(null); K.lockPointer(); K.enterMobile(); };
 $('#readyBtn').onclick = K.resume;
 $('#resumeBtn').onclick = K.resume;
+$('#tipsBtn').onclick = ()=>{ K.resetTips(); $('#tipsBtn').textContent = 'จะแสดงคำแนะนำอีกครั้งแล้ว'; };
 
 /* ---------- jumpscare ---------- */
 let scareT = 0;
@@ -177,7 +178,45 @@ function drawSC(){
 
 /* ---------- per-frame HUD ---------- */
 let teamT = 0;
+/* ---------- first-night tips: one short line at a time, each shown once per device ---------- */
+const seenTips = new Set(K.store.get('tips', []));
+let tipT = 0, tipGap = 0; const tipQ = [];
+const kb = (pc, mob) => K.IS_TOUCH ? mob : pc;
+function tip(id, text){ if(!seenTips.has(id) && !tipQ.some(q=>q.id===id)) tipQ.push({id, text}); }
+K.resetTips = function(){ seenTips.clear(); K.store.set('tips', []); };
+function tipTick(dt){
+  const el = $('#tip');
+  if(tipT>0){ tipT -= dt; if(tipT<=0){ el.classList.remove('on'); tipGap = 1.2; } return; }
+  if(tipGap>0){ tipGap -= dt; return; }
+  if(L.menu || !tipQ.length) return;
+  const q = tipQ.shift();
+  seenTips.add(q.id); K.store.set('tips', [...seenTips]);
+  el.textContent = q.text; el.classList.add('on'); tipT = Math.max(5, q.text.length/14);
+}
+function tipCheck(me){
+  if(!G.inGame || G.ph==='end' || L.menu) return;
+  const lit = K.ROUND.cand.filter(c=>c.lit).length;
+  const friendDown = Object.values(P).some(v=>v.id!==K.NET.me && v.role==='surv' && v.s==='down');
+  if(G.role==='ghost'){
+    if(G.ph==='wake') tip('gwake', `คุณเป็นผี! รอ 15 วินาทีให้คนหนีซ่อนก่อน แล้ว${kb('คลิก','กดปุ่มตะครุบ')}เพื่อพุ่งตะครุบ ${kb('กด Q','กดปุ่มสกิล')} ใช้พลังพิเศษ`);
+    else tip('ghunt', 'ตามหาคนหนีจากแสงไฟฉาย เสียงเทียนที่จุดพลาด และรอยแดงบนพื้นที่คนวิ่งทิ้งไว้');
+    if(friendDown) tip('gfinish', `มีคนล้มแล้ว! เข้าไป${kb('กด E ค้าง','กดปุ่มสูบค้าง')}ที่ตัวเพื่อสูบวิญญาณ ก่อนเพื่อนมันมาช่วย`);
+    if(me.flags&16) tip('gstun', 'โดนไฟฉายส่องจนมึน! อย่าเดินเข้าหาแสงตรงๆ อ้อมไปด้านข้างหรือข้างหลังแทน');
+    return;
+  }
+  if(me.s==='dead'){ tip('spirit', `คุณเป็นวิญญาณแล้ว ผีมองไม่เห็นคุณ ${kb('กด E','กดปุ่มชี้ทาง')} ไฟตรงที่มองอยู่จะกะพริบ ใช้บอกทางเพื่อนได้`); return; }
+  if(me.s!=='alive') return;
+  if(G.ph==='wake') tip('goal', `จุดเทียน ${CFG.candles} เล่มที่แท่นบูชา (มองหาแสงเรืองส้ม) ยืนข้างแท่นแล้ว${kb('กด E ค้างไว้','แตะปุ่มใช้')}`);
+  if(L.sc) tip('ring', `วงจังหวะขึ้นแล้ว! ${kb('กด Space','แตะจอ')} ตอนเข็มวิ่งเข้าช่องสว่าง ถ้าพลาดจะมีเสียงดังให้ผีได้ยิน`);
+  if(lit>=1) tip('offer', `ของไหว้ ${CFG.offerings} ชิ้นวางอยู่รอบวัด ถือไปวางที่ศาลพระภูมิ ระหว่างถือของจะวิ่งไม่ได้`);
+  if(K.fear>.4 && G.ph==='play') tip('near', `ผีอยู่ใกล้! ส่องไฟฉายใส่หน้ามันนานๆ จะมึน หรือย่อตัว (${kb('C','ปุ่มย่อ')}) เดินเงียบๆ หนี`);
+  if(L.ch) tip('charm', `ได้ของขลังแล้ว! ${kb('กด R','กดปุ่มของขลัง')} เพื่อใช้ ดูว่าเป็นอะไรได้ที่มุมขวาล่าง`);
+  if(L.battery<30) tip('bat', `ถ่านไฟฉายใกล้หมด ถ่านสำรองวางอยู่ตามจุดต่างๆ ในวัด ${kb('กด F','กดปุ่มไฟฉาย')} ปิดไฟเพื่อประหยัดได้`);
+  if(friendDown) tip('revive', `เพื่อนล้ม! รีบไป${kb('กด E ค้าง','แตะปุ่มใช้')}ที่ตัวเพื่อช่วยก่อนหมดเวลา`);
+}
+
 K.updateHUD = function(dt){
+  tipTick(dt);
   if(toastT>0){ toastT-=dt; if(toastT<=0) $('#toast').classList.remove('on'); }
   if(scareT>0){ scareT-=dt; if(scareT<=0) $('#scare').hidden = true; }
   const me = P[K.NET.me]; if(!me) return;
@@ -233,6 +272,7 @@ K.updateHUD = function(dt){
   const lv = K.voice.level(); $('#mic .dot').style.transform = `scale(${1+Math.min(1.5,lv*12)})`;
   // a few times a second: clock, goals, team, inventory
   teamT -= dt; if(teamT>0) return; teamT = .25;
+  tipCheck(me);
   $('#clockT').textContent = 'ฟ้าสางใน '+K.fmtTime(G.left); $('#clockT').classList.toggle('late', G.left<=60);
   $('#ghostId').textContent = ghost ? 'คุณคือ'+gdef.name : 'ผี: '+(G.known ? gdef.name : '???');
   const lit = K.ROUND.cand.filter(c=>c.lit).length, placed = K.ROUND.offers.filter(o=>o.placed).length;

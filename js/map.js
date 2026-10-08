@@ -244,6 +244,8 @@ K.BAT_SPOTS = [[-12.4,-17.6],[3.8,-7.2],[-18.6,4.6],[6,-1],[21.5,-11],[11,19.6],
 
 /* ---------- altars: one per spot, only this round's are shown ---------- */
 const flameMat = new THREE.MeshBasicMaterial({color:0xffb050});
+/* an unlit altar still shows a faint ember of old incense, so players can find it in the dark */
+const emberMat = new THREE.SpriteMaterial({map:K.glowTex(255,150,70), transparent:true, opacity:.55, blending:THREE.AdditiveBlending, depthWrite:false, fog:false});
 K.ALTARS = K.ALTAR_SPOTS.map(([x,z],i)=>{
   const g = new THREE.Group(); world.add(g);
   const table = block(MAT.wood,x,z,.8,.5,.7,0,{colH:.7, parent:g, occ:false});
@@ -252,8 +254,9 @@ K.ALTARS = K.ALTAR_SPOTS.map(([x,z],i)=>{
   const gar = new THREE.Mesh(new THREE.TorusGeometry(.12,.03,4,8), K.flat(0xd27a1c));
   gar.position.set(x+.05,.72,z+.12); gar.rotation.x=Math.PI/2; g.add(gar);
   const flame = new THREE.Mesh(new THREE.ConeGeometry(.035,.1,5), flameMat); flame.position.set(x-.15,.97,z); flame.visible=false; g.add(flame);
+  const ember = new THREE.Sprite(emberMat); ember.position.set(x+.18,.86,z); ember.scale.setScalar(.45); g.add(ember);
   g.visible = false; table.userData.col.off = true;
-  return {x,z,i,g,col:table.userData.col,flame};
+  return {x,z,i,g,col:table.userData.col,flame,ember};
 });
 K.setAltars = function(spots){
   for(const a of K.ALTARS){ const on = spots.includes(a.i); a.g.visible = on; a.col.off = !on; a.flame.visible = false; }

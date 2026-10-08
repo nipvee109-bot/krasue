@@ -98,7 +98,8 @@ K.popModel = function(){
 };
 K.pretModel = function(){
   const g = new THREE.Group();
-  const skin = flat(0x8d9096), bone = flat(0xa8aaa6), dark = flat(0x111214);
+  /* a faint pallor of its own, so the tall shape reads against the dark */
+  const skin = flat(0x9a9d9f,{emissive:0x14171a}), bone = flat(0xb4b6b0,{emissive:0x101214}), dark = flat(0x111214), rag = flat(0x2b2925,{side:THREE.DoubleSide});
   const legs = [-1,1].map(s=>{ const p=new THREE.Group(); p.position.set(s*.14,1.95,0); g.add(p);
     const m=new THREE.Mesh(new THREE.CylinderGeometry(.05,.07,1.95,5),skin); m.position.y=-.98; p.add(m);
     const k=new THREE.Mesh(new THREE.IcosahedronGeometry(.08,0),bone); k.position.y=-.95; p.add(k); return p; });
@@ -112,10 +113,16 @@ K.pretModel = function(){
   for(const s of [-1,1]){ const e=new THREE.Mesh(new THREE.IcosahedronGeometry(.045,0),dark); e.position.set(s*.065,.04,-.14); head.add(e); }
   const mouth = new THREE.Mesh(new THREE.CircleGeometry(.012,6),dark); mouth.position.set(0,-.12,-.155); mouth.rotation.y=Math.PI; head.add(mouth);
   for(let i=0;i<6;i++){ const h=new THREE.Mesh(boxGeo(.012,mr(.25,.5),.012),dark); h.position.set(mr(-.12,.12),.05,mr(.02,.12)); head.add(h); }
-  eyes(head, .04, -.17, .065, .06);
+  // long lank hair down the back and over the shoulders
+  for(let i=0;i<10;i++){ const a=mr(-2.2,2.2), l=mr(.7,1.4); const h=new THREE.Mesh(boxGeo(.018,l,.018),dark); h.position.set(Math.sin(a)*.14, .1-l/2, Math.cos(a)*.12+.03); h.rotation.z=mr(-.08,.08); head.add(h); }
+  eyes(head, .04, -.17, .065, .085);
+  // rags of an old robe hanging from the hips
+  for(let i=0;i<7;i++){ const l=mr(.5,1.1); const r=new THREE.Mesh(new THREE.PlaneGeometry(mr(.07,.12),l),rag); const a=i/7*Math.PI*2; r.position.set(Math.sin(a)*.17, 2.02-l/2, Math.cos(a)*.11); r.rotation.y=a; r.rotation.z=mr(-.1,.1); g.add(r); }
   const arms = [-1,1].map(s=>{ const p=new THREE.Group(); p.position.set(s*.2,2.85,0); g.add(p);
     const m=new THREE.Mesh(new THREE.CylinderGeometry(.03,.04,1.7,5),skin); m.position.y=-.85; p.add(m);
-    const hand=new THREE.Mesh(boxGeo(.07,.22,.03),skin); hand.position.y=-1.8; p.add(hand); return p; });
+    const hand=new THREE.Mesh(boxGeo(.07,.16,.03),skin); hand.position.y=-1.77; p.add(hand);
+    for(let f=0;f<3;f++){ const fi=new THREE.Mesh(boxGeo(.012,.28,.012),bone); fi.position.set(-.025+f*.025,-2.0,0); fi.rotation.x=-.15; p.add(fi); }   // fingers far too long
+    return p; });
   return {g, head, legs, arms, kind:'pret', yOff:-3.6};
 };
 K.ghostModel = k => k==='pop' ? K.popModel() : k==='pret' ? K.pretModel() : K.krasueModel();

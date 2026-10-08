@@ -55,6 +55,9 @@ body.ghost #tint{opacity:.62}
 #sc{left:50%;top:50%;width:180px;height:180px;margin:-90px 0 0 -90px}
 #toast{left:50%;top:20%;transform:translateX(-50%);max-width:min(560px,86vw);text-align:center;font-size:18px;line-height:1.5;text-shadow:0 0 10px #000,0 0 2px #000;opacity:0;transition:opacity .5s ease}
 #toast.on{opacity:1}
+#tip{left:50%;bottom:calc(64px + var(--sb));transform:translateX(-50%);max-width:min(520px,80vw);text-align:center;font-size:14.5px;line-height:1.5;padding:7px 14px;background:rgba(8,8,12,.62);border:1px solid rgba(208,138,60,.45);border-radius:6px;opacity:0;transition:opacity .4s ease;pointer-events:none}
+#tip.on{opacity:1}
+body.touch #tip{bottom:auto;top:calc(112px + var(--st));max-width:min(440px,60vw);font-size:13px}
 #status{left:50%;bottom:calc(28px + var(--sb));transform:translateX(-50%);font-size:18px;text-align:center;text-shadow:0 0 8px #000;white-space:nowrap}
 #status.bad{color:var(--blood)}
 #inv{right:calc(18px + var(--sr));bottom:calc(18px + var(--sb));text-align:right;display:grid;gap:4px;font-size:13px;color:var(--dim)}
