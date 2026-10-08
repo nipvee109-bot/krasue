@@ -92,12 +92,15 @@ K.onLobby = function(m){
     const b=document.createElement('button'); b.type='button'; b.setAttribute('role','radio'); b.setAttribute('aria-checked', bot===k); b.textContent=name;
     b.disabled = !host; if(host) b.onclick=()=>K.hostSetBot(k); bb.append(b);
   }
+  // with a bot the second row picks how hard it hunts; with friends it picks the mode
   const mb = $('#modeBtns'); mb.innerHTML='';
-  for(const [k,name] of [['normal','ปกติ'],['disguise','ปลอมตัว']]){
-    const b=document.createElement('button'); b.type='button'; b.setAttribute('role','radio'); b.setAttribute('aria-checked', (m.mode||'normal')===k); b.textContent=name;
-    b.disabled = !host || bot; if(host) b.onclick=()=>K.hostSetMode(k); mb.append(b);
+  const lv = m.lv==null ? 1 : m.lv;
+  $('#modeLabel').textContent = bot ? 'ความโหดของบอท' : 'โหมด';
+  for(const [k,name] of bot ? [[0,'ง่าย'],[1,'ปกติ'],[2,'โหด']] : [['normal','ปกติ'],['disguise','ปลอมตัว']]){
+    const b=document.createElement('button'); b.type='button'; b.setAttribute('role','radio'); b.setAttribute('aria-checked', bot ? lv===k : (m.mode||'normal')===k); b.textContent=name;
+    b.disabled = !host; if(host) b.onclick = bot ? ()=>K.hostSetBotLv(k) : ()=>K.hostSetMode(k); mb.append(b);
   }
-  $('#modeNote').textContent = bot ? 'บอทเป็นผี เล่นคนเดียวก็ได้ (โหมดปลอมตัวใช้กับบอทไม่ได้)' : dis ? 'ผีเริ่มเกมปนอยู่กับทุกคนในร่างของตัวเอง เดิน คุย ส่องไฟได้เหมือนคน แล้วค่อยกลายร่างออกล่า ใครเป็นผีต้องจับสังเกตเอาเอง' : 'ทุกคนรู้ว่าใครเป็นผี ผีเริ่มในโบสถ์ คนหนีได้เวลาซ่อน 15 วิ';
+  $('#modeNote').textContent = bot ? ['บอทเดินช้า ตาไม่ค่อยดี เหมาะกับเพิ่งหัดเล่น','บอทเป็นผี เล่นคนเดียวก็ได้ ได้ยินเสียงวิ่งและเห็นไฟฉาย','บอทไว ตาดี จำได้นาน พลาดนิดเดียวโดนตะครุบ'][lv] : dis ? 'ผีเริ่มเกมปนอยู่กับทุกคนในร่างของตัวเอง เดิน คุย ส่องไฟได้เหมือนคน แล้วค่อยกลายร่างออกล่า ใครเป็นผีต้องจับสังเกตเอาเอง' : 'ทุกคนรู้ว่าใครเป็นผี ผีเริ่มในโบสถ์ คนหนีได้เวลาซ่อน 15 วิ';
   K.renderGhostPick();
   // dawn
   const db = $('#dawnBtns'); db.innerHTML='';
@@ -107,7 +110,7 @@ K.onLobby = function(m){
   }
   // only the host changes the room settings; everyone else just reads them in one line
   $('#modeBox').hidden = !host; $('#dawnBox').hidden = !host;
-  $('#lobbyNote').textContent = (m.p.length<2 && !bot ? 'รอเพื่อนอย่างน้อยอีก 1 คน หรือเลือกผีเป็นบอท' : `${m.p.length} คนในห้อง`) + (host ? '' : ` · ${bot?'ผีบอท':'โหมด'+(dis?'ปลอมตัว':'ปกติ')} · ฟ้าสาง ${Math.round(m.dawn/60)} นาที · รอโฮสต์เริ่มเกม`);
+  $('#lobbyNote').textContent = (m.p.length<2 && !bot ? 'รอเพื่อนอย่างน้อยอีก 1 คน หรือเลือกผีเป็นบอท' : `${m.p.length} คนในห้อง`) + (host ? '' : ` · ${bot?'ผีบอท ('+['ง่าย','ปกติ','โหด'][lv]+')':'โหมด'+(dis?'ปลอมตัว':'ปกติ')} · ฟ้าสาง ${Math.round(m.dawn/60)} นาที · รอโฮสต์เริ่มเกม`);
   $('#startBtn').hidden = !host;
   $('#startBtn').disabled = m.p.length<(bot?1:2) && !K.DEBUG;
   K.onVoiceState();

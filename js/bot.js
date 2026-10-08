@@ -110,12 +110,16 @@ function findPath(g, ax, az, bx, bz){
 }
 
 /* ---------- senses ---------- */
+// difficulty set in the lobby: speed, how far it sees and hears, how long it stares before coming, lunge reach, memory
+// after landing a hit that doesn't drop you it lets go for a while (back), and its lunges aren't perfectly aimed (aim, radians)
+const LV = [{sp:.7, see:.6, hear:.65, notice:1.6, lunge:2.4, mem:3.5, back:12, aim:.35},{sp:.76, see:.75, hear:.8, notice:1.2, lunge:2.8, mem:5, back:10, aim:.28},{sp:.9, see:1, hear:1.05, notice:.7, lunge:3.3, mem:8, back:6, aim:.14}];
+const lv = () => LV[H.botLv==null ? 1 : H.botLv] || LV[1];
 const eyeY = gh => gh.y || 1.6;
 function sees(gh, q){
   const d = Math.hypot(q.x-gh.x, q.z-gh.z);
   if(d<2.2) return true;
   const lit = q.f&1, crouch = q.f&512, run = q.f&2;
-  const range = lit ? 24 : crouch ? 5 : run ? 14 : 10;
+  const range = (lit ? 24 : crouch ? 5 : run ? 14 : 10) * lv().see;
   if(d>range) return false;
   // a torch pointed your way is seen from anywhere it reaches; otherwise it has to be roughly in front
   const fx = -Math.sin(gh.a), fz = -Math.cos(gh.a);
@@ -125,7 +129,7 @@ function sees(gh, q){
 function hears(gh, q){
   const d = Math.hypot(q.x-gh.x, q.z-gh.z);
   if(!(q.f&4) || (q.f&512)) return false;   // still or crouch-walking: silent
-  return d < ((q.f&2) ? 13 : 5.5);
+  return d < ((q.f&2) ? 13 : 5.5) * lv().hear;
 }
 K.botNoise = function(x, z, w){ if(H.bot) H.bot.noise = {x, z, t:H.t, w:w||1}; };
 
@@ -139,6 +143,16 @@ K.botTick = function(gh, dt, surv){
   // feeding
   const feeding = B.feed && H.players[B.feed] && H.players[B.feed].s==='down' && Math.hypot(H.players[B.feed].x-gh.x, H.players[B.feed].z-gh.z) < CFG.reach;
   if(feeding && !stunned){ H.holds.bot = {k:'finish', i:B.feed, last:H.t}; faceTo(gh, H.players[B.feed], dt*4); hover(gh); return; }
+  // a hit landed: let the wounded one go and drift off somewhere else, it will be back
+  if(gh.stat.hit > (B.hits||0)){
+    B.hits = gh.stat.hit;
+    const v = B.target && H.players[B.target];
+    if(v && v.s==='alive'){
+      B.ignore[v.i] = H.t + lv().back; B.target = null; B.last = null; B.path = null; B.noise = null;
+      const pts = PATROL().filter(c=>Math.hypot(c[0]-v.x, c[1]-v.z) > 12);
+      B.wp = pts.length ? K.pick(pts) : null; B.wander = H.t+25;
+    }
+  }
   B.think -= dt;
   if(B.think<=0){
     B.think = .25;
@@ -149,9 +163,9 @@ K.botTick = function(gh, dt, surv){
       if(q.s!=='alive' || (B.ignore[q.i]||0)>H.t) continue;
       if(sees(gh, q) || hears(gh, q)){ const d = Math.hypot(q.x-gh.x, q.z-gh.z); if(d<bd){ bd = d; best = {q}; } }
     }
-    if(best && !B.target && !best.down) B.notice = H.t + .75;   // it spots you, stops, stares... then comes
+    if(best && !B.target && !best.down) B.notice = H.t + lv().notice;   // it spots you, stops, stares... then comes
     if(best){ B.target = best.q.i; B.last = {x:best.q.x, z:best.q.z, t:H.t}; B.feed = best.down ? best.q.i : null; }
-    else if(B.target && H.t-(B.last ? B.last.t : 0) > 7) B.target = null;
+    else if(B.target && H.t-(B.last ? B.last.t : 0) > lv().mem) B.target = null;
     // skills
     if(H.t>=gh.skillReady && !stunned){
       const tq = B.target && H.players[B.target], d = tq ? Math.hypot(tq.x-gh.x, tq.z-gh.z) : 99;
@@ -178,8 +192,8 @@ K.botTick = function(gh, dt, surv){
   // lunge when someone is right there
   if(chasing && tq && tq.s==='alive' && !stunned && !lunging && H.t>=gh.atkReady){
     const d = Math.hypot(tq.x-gh.x, tq.z-gh.z);
-    if(d < 3.3 && K.lineOfSight(gh.x, eyeY(gh), gh.z, tq.x, 1.2, tq.z)){
-      gh.a = Math.atan2(-(tq.x-gh.x), -(tq.z-gh.z));
+    if(d < lv().lunge && K.lineOfSight(gh.x, eyeY(gh), gh.z, tq.x, 1.2, tq.z)){
+      gh.a = Math.atan2(-(tq.x-gh.x), -(tq.z-gh.z)) + (Math.random()-.5)*2*lv().aim;
       K.hostRecv('bot', {t:'atk'});
       B.lungeYaw = gh.a;
     }
@@ -191,7 +205,7 @@ K.botTick = function(gh, dt, surv){
   else if(H.t < gh.lungeUntil){ mx = -Math.sin(B.lungeYaw); mz = -Math.cos(B.lungeYaw); speed = CFG.lunge; }
   else {
     const missSlow = (gh.atkReady-H.t) > CFG.missCD+.05 ? .55 : 1;
-    speed = G_.speed * .9 * (H.t<gh.invUntil ? 1.1 : 1) * missSlow * (H.gate ? CFG.rage : 1);
+    speed = G_.speed * lv().sp * (H.t<gh.invUntil ? 1.1 : 1) * missSlow * (H.gate ? CFG.rage : 1);
     // close and in sight: no path needed
     if(chasing && Math.hypot(tx-gh.x, tz-gh.z) < 6 && walkLine(grid, gh.x, gh.z, tx, tz)) B.path = [[tx,tz]];
     else {

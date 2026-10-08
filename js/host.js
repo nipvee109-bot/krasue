@@ -3,7 +3,7 @@
 (function(K){
 'use strict';
 const {CFG, GHOSTS, clamp, r2} = K;
-const H = K.H = {phase:'none', lobby:[], pick:null, gtype:{}, dawn:K.store.get('dawn', CFG.dawn), mode:K.store.get('mode','normal')==='disguise'?'disguise':'normal', botOn:!!K.store.get('bot', false), joinN:0,
+const H = K.H = {phase:'none', lobby:[], pick:null, gtype:{}, dawn:K.store.get('dawn', CFG.dawn), mode:K.store.get('mode','normal')==='disguise'?'disguise':'normal', botOn:!!K.store.get('bot', false), botLv:Math.min(2,Math.max(0,K.store.get('botlv',1)|0)), joinN:0,
   players:{}, t:0, wake:0, left:0, gk:'krasue', altars:[], candles:[], offers:[], charms:[], bats:[], holy:[], holds:{}};
 const isSpect = p => p.s==='dead' || p.s==='escaped';
 
@@ -15,7 +15,7 @@ K.nextGhost = () => { const o = order(); return o.length ? o[0].i : null; };
 /* in disguise mode nobody (the host included) is told who the next ghost is: it is drawn at the start */
 const hidden = () => H.mode==='disguise' || H.botOn;
 function lobbyMsg(){
-  return {t:'lobby', code:K.NET.code, host:K.NET.me, ghost:hidden()?null:K.nextGhost(), picked:!hidden() && !!H.pick, queue:hidden()?[]:order().map(q=>q.i), dawn:H.dawn, mode:H.botOn?'normal':H.mode, bot:H.botOn,
+  return {t:'lobby', code:K.NET.code, host:K.NET.me, ghost:hidden()?null:K.nextGhost(), picked:!hidden() && !!H.pick, queue:hidden()?[]:order().map(q=>q.i), dawn:H.dawn, mode:H.botOn?'normal':H.mode, bot:H.botOn, lv:H.botLv,
     p:H.lobby.map(q=>({i:q.i, n:q.n, look:q.look, gc:q.gc}))};
 }
 K.broadcastLobby = function(){
@@ -31,6 +31,7 @@ K.hostOpen = function(id, name){
 K.hostSetGhost = function(id){ if(!K.NET.isHost || H.phase!=='lobby' || hidden()) return; H.pick = H.pick===id ? null : id; K.broadcastLobby(); };
 K.hostSetMode = function(mode){ if(!K.NET.isHost || H.phase!=='lobby') return; H.mode = mode==='disguise' ? 'disguise' : 'normal'; H.pick = null; K.store.set('mode', H.mode); K.broadcastLobby(); };
 K.hostSetBot = function(on){ if(!K.NET.isHost || H.phase!=='lobby') return; H.botOn = !!on; H.pick = null; K.store.set('bot', H.botOn); K.broadcastLobby(); };
+K.hostSetBotLv = function(lv){ if(!K.NET.isHost || H.phase!=='lobby') return; H.botLv = Math.min(2,Math.max(0,lv|0)); K.store.set('botlv', H.botLv); K.broadcastLobby(); };
 K.hostSetDawn = function(sec){ if(!K.NET.isHost) return; H.dawn = sec; K.store.set('dawn', sec); if(H.phase==='lobby') K.broadcastLobby(); };
 K.hostDrop = function(id){
   if(!K.NET.isHost) return;
@@ -215,7 +216,7 @@ K.hostStart = function(){
     const z = inRow ? 21.2 : -3.6, a = inRow ? 0 : Math.PI;
     H.players[q.i] = {i:q.i, n:q.n, role, gk:role==='ghost'?gk:null, mob:q.mob, x, y:role==='ghost'&&!dis?GHOSTS[gk].eye:0, z, a, b:0, f:1,
       dis: role==='ghost' && dis, bot: q.i==='bot', morphUntil:0, formUntil:0, formReady: CFG.wake+CFG.formFirst,
-      h:2, s:'alive', bl:0, rv:0, fn:0, ch:null, of:-1, pl:0, slowUntil:0, pingReady:0, wispReady:0,
+      h:2, s:'alive', bl:0, rv:0, fn:0, ch:bot && role==='surv' && H.lobby.length===1 ? 'takrut' : null, of:-1, pl:0, slowUntil:0, pingReady:0, wispReady:0,
       stunAcc:0, stunUntil:0, immUntil:0, invUntil:0, skillUntil:0, skillReady:0, atkReady:0, lungeUntil:0, lungeHit:false,
       stat:{c:0, o:0, rv:0, stun:0, hit:0, down:0, kill:0}};   // for the results screen
     return {i:q.i, n:q.n, look:q.look, x, z, a};

@@ -100,7 +100,7 @@ K.nameOf = id => P[id] ? (id===K.NET.me ? 'คุณ' : P[id].name) : 'ใคร
 
 function onStart(m){
   K.exitGame();
-  G.inGame = true; G.mode = m.mode==='disguise' ? 'disguise' : 'normal'; G.disg = G.mode==='disguise'; G.ph = 'wake'; G.gate = false; G.ended = false; G.wake = CFG.wake; G.gk = m.gk; G.dawn = m.dawn; G.left = m.dawn; G.known = false;
+  G.inGame = true; G.mode = m.mode==='disguise' ? 'disguise' : 'normal'; G.disg = G.mode==='disguise'; G.ph = 'wake'; G.gate = false; G.ended = false; G.wake = CFG.wake; G.gk = m.gk; G.dawn = m.dawn; G.left = m.dawn; G.known = false; G.ghost = m.ghost;
   buildRound(m);
   for(const pl of m.p) addPlayerView(pl, pl.i===m.ghost?'ghost':'surv');
   const me = P[K.NET.me]; if(!me){ K.exitGame(); return; }
@@ -134,7 +134,8 @@ function onStart(m){
   } else {
     K.$('#roleSub').textContent = 'คุณคือคนหนี · ผีคือ '+gname+' (ยังไม่รู้ว่าเป็นผีอะไร)';
     K.$('#roleTitle').textContent = 'คนหนี';
-    K.$('#roleText').textContent = `จุดเทียน ${CFG.candles} เล่ม และขนของไหว้ ${CFG.offerings} ชิ้นไปวางที่ศาลพระภูมิ ประตูวัดทางใต้จึงจะเปิด หนีออกไปก่อนฟ้าสาง (${Math.round(G.dawn/60)} นาที) ระหว่างจุดเทียนจะมีวงจังหวะขึ้นมา กดให้ตรง ถ้าพลาดเสียงจะดังจนผีได้ยิน ส่องไฟฉายใส่หน้าผีนานๆ มันจะมึน ของขลังหาเก็บได้รอบวัด · วิ่งแล้วผีจะเห็นรอย ย่อตัว (${K.IS_TOUCH?'ปุ่มย่อ':'C'}) จะเดินเงียบ`;
+    const solo = G.ghost==='bot' && Object.keys(P).length<=2;
+    K.$('#roleText').textContent = (G.ghost==='bot' ? 'ผีคืนนี้เป็นบอท มันได้ยินเสียงวิ่งและเห็นแสงไฟฉาย' + (solo ? ' · คุณมาคนเดียว หลวงพ่อเลยฝากตะกรุดไว้ 1 ดอก กันโดนตะครุบได้ครั้งหนึ่ง' : '') + ' · ' : '') + `จุดเทียน ${CFG.candles} เล่ม และขนของไหว้ ${CFG.offerings} ชิ้นไปวางที่ศาลพระภูมิ ประตูวัดทางใต้จึงจะเปิด หนีออกไปก่อนฟ้าสาง (${Math.round(G.dawn/60)} นาที) ระหว่างจุดเทียนจะมีวงจังหวะขึ้นมา กดให้ตรง ถ้าพลาดเสียงจะดังจนผีได้ยิน ส่องไฟฉายใส่หน้าผีนานๆ มันจะมึน ของขลังหาเก็บได้รอบวัด · วิ่งแล้วผีจะเห็นรอย ย่อตัว (${K.IS_TOUCH?'ปุ่มย่อ':'C'}) จะเดินเงียบ`;
   }
   K.show('#roleCard');
   L.menu = true;
