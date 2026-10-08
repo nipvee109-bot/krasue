@@ -93,6 +93,7 @@ function onStart(m){
   L.pos.set(me.pos.x, 0, me.pos.z); L.yaw = me.yaw; L.pitch = 0;
   L.battery = 100; L.stamina = 100; L.exhausted = false; L.light = G.role==='surv'; L.escSent = false; L.lungeUntil = 0; L.boostUntil = 0;
   L.sc = null; L.ch = ''; L.of = -1; L.flyY = 3; L.autoHold = null; L.crouch = false; L.eyeH = CFG.eye;
+  if(K.resetProps) K.resetProps();
   document.body.classList.toggle('ghost', G.role==='ghost');
   K.setVision();
   K.$('#hudWrap').hidden = false;

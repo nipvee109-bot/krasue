@@ -154,3 +154,14 @@ body.touch #status{bottom:calc(10px + var(--sb));font-size:15px}
 #rotate{display:none;position:absolute;inset:0;z-index:40;background:var(--ink);place-items:center;text-align:center;font-family:var(--display);font-size:28px;padding:24px}
 @media (orientation:portrait){ body.touch.ingame #rotate{display:grid} }
 @media (prefers-reduced-motion:reduce){#toast,#tint,#hurt{transition:none}#scareC{animation-duration:.01s}}
+
+/* lobby: the card becomes a side panel so the people standing at the gate show on the left */
+body.lobby3d #lobbyCard{place-items:center end;padding:20px calc(18px + var(--sr,0px)) 20px 16px;
+  background:linear-gradient(to left, rgba(5,6,10,.93) 0, rgba(5,6,10,.9) min(440px,48vw), rgba(5,6,10,0) calc(min(440px,48vw) + 90px))}
+body.lobby3d #lobbyCard .card-in{max-width:min(420px,46vw);gap:12px}
+body.lobby3d #lobbyCard .code-big{font-size:clamp(34px,6vw,54px)}
+body.lobby3d #lobbyCard .keys{grid-template-columns:1fr 1fr;font-size:12px;gap:6px 12px}
+@media (orientation:portrait){
+  body.lobby3d #lobbyCard{place-items:end center;padding:46vh 16px 24px;background:linear-gradient(to top, rgba(5,6,10,.94) 0, rgba(5,6,10,.9) 52%, rgba(5,6,10,0) 64%)}
+  body.lobby3d #lobbyCard .card-in{max-width:560px}
+}

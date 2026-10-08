@@ -88,6 +88,7 @@ function strike(){
   setTimeout(()=>K.sfx.thunder && K.sfx.thunder(), d*1000);
 }
 K.strike = strike;
+K.flashOn = () => flashLevel();
 function flashLevel(){
   if(LT.t<0) return 0;
   for(const [a,b] of LT.seq) if(LT.t>=a && LT.t<=b) return 1;
@@ -143,6 +144,176 @@ function updateFigure(dt){
   }
 }
 
+/* ---------- ตุ๊กตา: old dolls on the monks' shelves. They turn to face you while you aren't looking ---------- */
+const dollFace = K.canvasTex(32,32,(g)=>{
+  g.fillStyle='#d9cdb8'; g.fillRect(0,0,32,32);
+  g.fillStyle='#120c0a'; g.fillRect(0,0,32,9); g.fillRect(0,0,4,20); g.fillRect(28,0,4,20);       // black bob
+  g.fillStyle='#050404'; g.beginPath(); g.ellipse(11,16,3.4,4.2,0,0,7); g.ellipse(21,16,3.4,4.2,0,0,7); g.fill();
+  g.fillStyle='rgba(200,190,170,.9)'; g.fillRect(10,14,1,1); g.fillRect(20,14,1,1);
+  g.fillStyle='#7a1010'; g.fillRect(14,24,4,2);
+  g.fillStyle='rgba(90,20,15,.55)'; g.fillRect(10,21,1,5); g.fillRect(22,21,1,4);              // stains under the eyes
+});
+const DOLLS = [];
+{
+  const dress = flat(0x7a1c1c), skin = new THREE.MeshPhongMaterial({color:0xd9cdb8, flatShading:true}), hair = flat(0x120c0a);
+  const faceM = new THREE.MeshBasicMaterial({map:dollFace});
+  for(const [x,y,z] of [[-16.6,1.1,-15.4],[-9.6,1.1,-20.5],[-19.1,1.1,9.8],[20.9,1.1,1.6],[1.9,.9,-18.3],[-12.5,.45,3]]){
+    const g = new THREE.Group(); g.position.set(x,y,z); world.add(g);
+    const body = new THREE.Mesh(new THREE.ConeGeometry(.12,.26,7), dress); body.position.y=.13; g.add(body);
+    const head = new THREE.Group(); head.position.y=.33; g.add(head);
+    head.add(new THREE.Mesh(new THREE.IcosahedronGeometry(.085,1), skin));
+    const hr = new THREE.Mesh(new THREE.IcosahedronGeometry(.09,1), hair); hr.position.set(0,.015,-.012); hr.scale.set(1,1,.92); head.add(hr);
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(.13,.13), faceM); f.position.z=.083; head.add(f);
+    const away = R(0,Math.PI*2); g.rotation.y = away;
+    DOLLS.push({g, head, x, y, z, away, unseen:0, facing:false, armed:false, seenFor:0});
+  }
+}
+let dollGiggleAt = -99, dollT = 0;
+/* is a point inside my view (and not behind a wall)? */
+function inView(x,y,z,far){
+  const cp = K.camera.position, dx=x-cp.x, dy=y-cp.y, dz=z-cp.z, d=Math.hypot(dx,dy,dz);
+  if(d>far) return false;
+  const f = tmpV.set(0,0,-1).applyQuaternion(K.camera.quaternion);
+  if((f.x*dx+f.y*dy+f.z*dz)/d < .76) return false;
+  return K.lineOfSight(cp.x,cp.y,cp.z,x,y,z);
+}
+const tmpV = new V3();
+function updateDolls(dt){
+  dollT += dt; if(dollT<.2) return;
+  const st = dollT; dollT = 0;
+  const me = P[K.NET.me], living = G.inGame && me && me.role==='surv' && me.s==='alive';
+  for(const d of DOLLS){
+    const dist = Math.hypot(L.pos.x-d.x, L.pos.z-d.z);
+    const seen = dist<16 && inView(d.x,d.y+.3,d.z,16);
+    if(seen){
+      d.unseen = 0;
+      if(d.armed && dist<10){ d.armed = false; d.seenFor = 0;
+        if(living && K.gameTime-dollGiggleAt>35){ dollGiggleAt = K.gameTime; setTimeout(()=>{ if(G.inGame) K.sfx.giggle(K.at({x:d.x,y:d.y+.3,z:d.z})); }, 500); }
+      }
+      d.seenFor += st;
+      // stare long enough from close by and the head tilts
+      d.head.rotation.z += ((d.facing && dist<3.5 && d.seenFor>1.2 ? .45 : 0) - d.head.rotation.z)*Math.min(1,st*3);
+      continue;
+    }
+    d.unseen += st; d.seenFor = 0;
+    if(!d.facing && living && dist<13 && d.unseen>1.5 && Math.random()<st*.35){
+      d.facing = true; d.armed = true; d.g.rotation.y = Math.atan2(L.pos.x-d.x, L.pos.z-d.z);
+    } else if(d.facing && d.unseen>12 && Math.random()<st*.1){
+      d.facing = false; d.armed = false; d.g.rotation.y = d.away = R(0,Math.PI*2); d.head.rotation.z = 0;
+    } else if(d.facing && dist<13) d.g.rotation.y = Math.atan2(L.pos.x-d.x, L.pos.z-d.z);   // keep following while unseen
+  }
+}
+
+/* ---------- โลงศพ: a coffin left in the hall. Sometimes something inside knocks ---------- */
+const COFFIN = (function(){
+  const x=3.25, z=-17.3, g = new THREE.Group(); g.position.set(x,0,z); world.add(g);
+  const wood = flat(0x2a1a12), gold = MAT.gold;
+  for(const sx of [-.7,.7]){ const t=new THREE.Mesh(boxGeo(.08,.55,.5), wood); t.position.set(sx,.275,0); g.add(t); }
+  const box = new THREE.Mesh(boxGeo(1.9,.5,.58), wood); box.position.y=.8; g.add(box);
+  const trim = new THREE.Mesh(boxGeo(1.94,.05,.62), gold); trim.position.y=.6; g.add(trim);
+  const pivot = new THREE.Group(); pivot.position.set(0,1.05,-.29); g.add(pivot);
+  const lid = new THREE.Mesh(boxGeo(1.96,.1,.62), wood); lid.position.set(0,.05,.31); pivot.add(lid);
+  const ridge = new THREE.Mesh(boxGeo(1.7,.08,.3), wood); ridge.position.set(0,.13,.31); pivot.add(ridge);
+  pivot.rotation.set(-.06,0,.02);                      // never quite closed
+  const crack = new THREE.Mesh(boxGeo(1.6,.04,.02), new THREE.MeshBasicMaterial({color:0x000000})); crack.position.set(0,1.06,.3); g.add(crack);
+  // a wreath of dead flowers leaning on it, and two cold candles
+  const wr = new THREE.Mesh(new THREE.TorusGeometry(.28,.07,5,10), flat(0x8c8270)); wr.position.set(-1.12,.55,.12); wr.rotation.set(0,Math.PI/2,.15); g.add(wr);
+  for(const sx of [-.6,.6]){ const c=new THREE.Mesh(new THREE.CylinderGeometry(.03,.03,.24,6), flat(0xd8d0bb)); c.position.set(sx,1.26,.3); g.add(c); }
+  K.colliders.push({x0:x-.98,x1:x+.98,z0:z-.31,z1:z+.31,h:1.1});
+  return {x, z, pivot, next:mr(20,40), k:-1};
+})();
+function updateCoffin(dt){
+  const C = COFFIN, d = Math.hypot(L.pos.x-C.x, L.pos.z-C.z);
+  C.next -= dt;
+  if(C.next<=0){
+    C.next = mr(35,75);
+    const me = P[K.NET.me];
+    if(G.inGame && me && me.s==='alive' && d<9){ K.sfx.knock(K.at({x:C.x,y:.9,z:C.z})); C.k = 0; }
+  }
+  if(C.k>=0){
+    C.k += dt;
+    const b = [0,.32,.64].some(t=>C.k>t && C.k<t+.09);
+    C.pivot.rotation.x = b ? -.14 : -.06;
+    if(C.k>1) C.k = -1;
+  }
+}
+
+/* ---------- อีกา: crows on the walls burst into the air when someone comes close, ghost included ---------- */
+const CROWS = [];
+{
+  const black = flat(0x0d0d10), beakM = flat(0x2a2620);
+  const bodyG = new THREE.IcosahedronGeometry(.11,0), headG = new THREE.IcosahedronGeometry(.06,0), beakG = new THREE.ConeGeometry(.02,.08,4), wingG = new THREE.PlaneGeometry(.24,.12); wingG.translate(.12,0,0);
+  const tailG = new THREE.PlaneGeometry(.08,.14);
+  const eyeM = new THREE.MeshBasicMaterial({color:0xc8a040});
+  for(const [x,y,z] of [[-8.6,1.6,-2],[-7.3,1.6,-2],[4.5,1.8,9],[12.4,1.7,4.5],[-22.4,1.7,-14],[3,1.8,-22],[4.2,1.8,-22],[-9,1.9,-11.5],[-22,1.5,4],[21.5,1.5,15.5],[17.5,1.8,19.5],[-3.5,1.7,16.2]]){
+    const g = new THREE.Group(); world.add(g);
+    const b = new THREE.Mesh(bodyG, black); b.scale.set(.8,.8,1.35); b.position.y=.1; g.add(b);
+    const h = new THREE.Mesh(headG, black); h.position.set(0,.2,.12); g.add(h);
+    const bk = new THREE.Mesh(beakG, beakM); bk.rotation.x=Math.PI/2; bk.position.set(0,.19,.2); g.add(bk);
+    for(const s of [-1,1]){ const e=new THREE.Mesh(new THREE.SphereGeometry(.009,4,3), eyeM); e.position.set(s*.035,.215,.155); g.add(e); }
+    const t = new THREE.Mesh(tailG, black); t.position.set(0,.08,-.2); t.rotation.x=-1.1; g.add(t);
+    const wings = [-1,1].map(s=>{ const w=new THREE.Mesh(wingG, black); w.material.side = THREE.DoubleSide; w.position.set(s*.05,.14,0); w.rotation.set(-Math.PI/2,0,0); w.scale.x=s; w.visible=false; g.add(w); return w; });
+    const c = {g, head:h, wings, home:new V3(x,y,z), st:'perch', t:0, vel:new V3(), ph:R(0,6)};
+    resetCrow(c); CROWS.push(c);
+  }
+  black.side = THREE.DoubleSide;
+}
+function resetCrow(c){
+  c.st = 'perch'; c.t = 0; c.g.visible = true;
+  c.g.position.copy(c.home).add(tmpV.set(R(-.2,.2),0,R(-.1,.1))); c.g.rotation.set(0,R(0,6.3),0);
+  for(const w of c.wings) w.visible = false;
+}
+function flush(c, near){
+  c.st = 'fly'; c.t = 0;
+  const a = Math.atan2(c.home.x-near.x, c.home.z-near.z) + R(-.8,.8);
+  c.vel.set(Math.sin(a)*R(3,4.5), R(2.2,3.2), Math.cos(a)*R(3,4.5));
+  c.g.rotation.set(0, a, 0);
+  for(const w of c.wings) w.visible = true;
+}
+let crowSfxAt = -99, crowT = 0;
+function updateCrows(dt){
+  crowT += dt;
+  const scan = crowT>.15; if(scan) crowT = 0;
+  // who is moving around: living survivors and the ghost, wherever it hides
+  let movers = null;
+  if(scan && G.inGame && (G.ph==='play'||G.ph==='wake')){
+    movers = [];
+    for(const v of Object.values(P)){
+      const mine = v.id===K.NET.me;
+      if(v.role==='ghost' ? G.ph!=='play' : v.s!=='alive') continue;
+      const p = mine ? L.pos : v.pos; if(!p) continue;
+      const run = mine ? (L.running && L.moving) : (v.flags&2);
+      movers.push({x:p.x, z:p.z, r: v.role==='ghost' ? 4.5 : run ? 6 : (v.flags&512)||(mine&&L.crouch) ? 1.6 : 3});
+    }
+  }
+  for(const c of CROWS){
+    c.t += dt;
+    if(c.st==='perch'){
+      c.head.rotation.y = Math.sin(c.t*.9+c.ph)>.6 ? .6 : Math.sin(c.t*.7+c.ph*3)>.7 ? -.5 : 0;   // twitchy head turns
+      if(movers) for(const m of movers) if(Math.hypot(m.x-c.home.x, m.z-c.home.z)<m.r){
+        // the whole perch goes up together
+        let n = 0;
+        for(const o of CROWS) if(o.st==='perch' && o.home.distanceTo(c.home)<3){ flush(o, m); n++; }
+        if(K.gameTime-crowSfxAt>.6){ crowSfxAt = K.gameTime; const at = {x:c.home.x, y:c.home.y+.5, z:c.home.z}; K.sfx.flap(K.at(at)); K.sfx.caw(K.at(at)); }
+        break;
+      }
+    } else if(c.st==='fly'){
+      c.vel.y += dt*.6; c.g.position.addScaledVector(c.vel, dt);
+      const fl = Math.sin(c.t*26)*.9;
+      c.wings[0].rotation.y = fl; c.wings[1].rotation.y = -fl;
+      if(c.t>4){ c.st = 'gone'; c.g.visible = false; c.t = 0; }
+    } else if(c.t>40 && Math.hypot(L.pos.x-c.home.x, L.pos.z-c.home.z)>14){
+      // drift back once nobody has been around for a while
+      if(!movers || movers.every(m=>Math.hypot(m.x-c.home.x, m.z-c.home.z)>8)) resetCrow(c);
+    }
+  }
+}
+if(K.DEBUG) K._props = {DOLLS, CROWS, COFFIN, inView};
+K.resetProps = function(){
+  for(const c of CROWS) resetCrow(c);
+  for(const d of DOLLS){ d.facing = d.armed = false; d.g.rotation.y = d.away; d.head.rotation.z = 0; }
+};
+
 /* ---------- per frame ---------- */
 const dread = K.$('#dread'), grainEl = K.$('#grain');
 K.fear = 0;
@@ -190,5 +361,6 @@ K.updateAmbience = function(dt){
   dread.style.opacity = (K.fear*.85*(.85+.15*Math.sin(t*7))).toFixed(3);
   grainEl.style.opacity = (.05 + K.fear*.13).toFixed(3);
   if(G.inGame) updateFigure(dt); else if(fig.g.visible) fig.g.visible = false;
+  updateDolls(dt); updateCoffin(dt); updateCrows(dt);
 };
 })(window.K);

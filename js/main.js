@@ -16,9 +16,10 @@ function frame(dt){
     K.updateAudio(dt);
     K.perfWatch(dt);
   } else {
-    // menu backdrop: slow orbit over the temple
+    // menu backdrop: slow orbit over the temple (the lobby has its own scene, see lobby3d.js)
     const a = K.gameTime*.05;
     K.camera.position.set(Math.sin(a)*18, 6, Math.cos(a)*18+4); K.camera.lookAt(0,1.5,-6);
+    if(K.lobby3d.active()) K.lobby3d.frame(dt);
     K.updateHUD(dt);
     K.benchFrame(dt);
     if(K.lookOpen()) K.preview.frame(dt);
@@ -27,7 +28,7 @@ function frame(dt){
   K.updateWorld(dt);
   K.updateAmbience(dt);
   K.grain(dt);
-  K.renderer.render(K.scene, K.camera);
+  if(!G.inGame && K.lobby3d.active()) K.lobby3d.render(); else K.renderer.render(K.scene, K.camera);
 }
 function loop(t){ requestAnimationFrame(loop); const dt=Math.min(.05,(t-lastT)/1000); lastT=t; if(!G.manual) frame(dt); }
 requestAnimationFrame(loop);

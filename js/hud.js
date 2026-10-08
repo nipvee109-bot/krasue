@@ -11,6 +11,7 @@ const CARDS = ['#menuCard','#lookCard','#lobbyCard','#roleCard','#pauseCard','#e
 let lookReturn = '#menuCard';
 K.show = function(id){
   for(const c of CARDS) $(c).hidden = c!==id;
+  document.body.classList.toggle('lobby3d', id==='#lobbyCard');
   if(id) K.resetTouch && K.resetTouch();
   K.setRoleClass();
 };
@@ -91,6 +92,7 @@ K.onLobby = function(m){
   $('#startBtn').hidden = !host;
   $('#startBtn').disabled = m.p.length<2 && !K.DEBUG;
   K.onVoiceState();
+  K.lobby3d.sync(m);
 };
 K.renderGhostPick = function(){
   const box = $('#gBtns'); if(!box) return;
