@@ -198,18 +198,23 @@ if(K.IS_TOUCH){
     K.goFullscreen();
   }, {capture:true, passive:true});
 }
-function fsLabel(){ for(const b of K.$$('.fsBtn')){ b.textContent = fsEl() ? 'ออกจากเต็มจอ' : 'เต็มจอ'; b.hidden = !K.canFullscreen; } }
-for(const b of K.$$('.fsBtn')) b.addEventListener('click', async ()=>{
+/* the full screen button: on phones it floats at the top corner of every menu; on iPhones (no full screen for pages) it explains the home-screen icon */
+const isIOS = /iPhone|iPod|iPad/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+K.fsRefresh = function(){
+  const on = !!fsEl();
+  for(const b of K.$$('.fsBtn')){ b.textContent = on ? 'ออกจากเต็มจอ' : '⛶ เต็มจอ'; b.hidden = !K.IS_TOUCH || standalone || (!fsReq && !isIOS); }
+  const f = K.$('#fsFloat'); if(f) f.hidden = f.hidden || on || (G.inGame && !L.menu);
+};
+for(const b of K.$$('.fsBtn')) b.addEventListener('click', async e=>{
+  e.stopPropagation();
+  if(!fsReq){ K.$('#iosHelp').hidden = false; return; }
   if(fsEl()){ fsOff = true; K.store.set('fsOff', true); try{ await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen()); }catch(e){} }
   else { fsOff = false; K.store.set('fsOff', false); await K.goFullscreen(); }
-  fsLabel();
+  K.fsRefresh();
 });
-for(const ev of ['fullscreenchange','webkitfullscreenchange']) document.addEventListener(ev, ()=>{ fsLabel(); setTimeout(K.resize, 120); });
-fsLabel();
-{ // iPhone in Safari: tell them how to get full screen
-  const ios = /iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1 && !fsReq);
-  const n = K.$('#iosNote'); if(n) n.hidden = !(ios && !standalone && !fsReq);
-}
+K.$('#iosHelpOk').addEventListener('click', ()=>{ K.$('#iosHelp').hidden = true; });
+for(const ev of ['fullscreenchange','webkitfullscreenchange']) document.addEventListener(ev, ()=>{ K.fsRefresh(); setTimeout(K.resize, 120); });
+K.fsRefresh();
 K.keepAwake = async function(){
   try{ if('wakeLock' in navigator && !wakeLock){ wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', ()=>{ wakeLock = null; }); } }catch(e){}
 };

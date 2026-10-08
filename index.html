@@ -54,19 +54,20 @@
   <div id="touch" hidden>
     <div id="stick" hidden><div id="knob"></div></div>
     <button class="tb pause" data-act="pause" aria-label="เมนู">☰</button>
+    <!-- right thumb: one big action, up to three around it, two small ones up the edge -->
     <div class="pad">
       <button class="tb big r-surv" data-act="use">ใช้</button>
-      <button class="tb r-surv" data-act="light">ไฟฉาย</button>
-      <button class="tb r-surv" data-act="charm">ของขลัง</button>
-      <button class="tb r-surv" data-act="sig">สัญญาณ</button>
-      <button class="tb r-surv" data-act="crouch" id="tCrouch">ย่อ</button>
-      <button class="tb r-surv r-spect r-lobby" data-act="mic" id="tMic">ไมค์</button>
+      <button class="tb p2 r-surv" data-act="light">ไฟฉาย</button>
+      <button class="tb p1 r-surv" data-act="crouch" id="tCrouch">ย่อ</button>
+      <button class="tb p3 r-surv" data-act="charm" id="tCharm">ของขลัง</button>
       <button class="tb big r-ghost" data-act="atk">ตะครุบ</button>
-      <button class="tb r-ghost" data-act="skill" id="tSkill">สกิล</button>
-      <button class="tb r-ghost" data-act="hold">สูบ<small>กดค้าง</small></button>
+      <button class="tb p2 r-ghost" data-act="skill" id="tSkill">สกิล</button>
+      <button class="tb p1 r-ghost" data-act="hold">สูบ<small>กดค้าง</small></button>
       <button class="tb big r-spect" data-act="wisp">ชี้ทาง</button>
-      <button class="tb r-spect" data-act="up">ขึ้น</button>
-      <button class="tb r-spect" data-act="down">ลง</button>
+      <button class="tb p2 r-spect" data-act="up">ขึ้น</button>
+      <button class="tb p1 r-spect" data-act="down">ลง</button>
+      <button class="tb sm s1 r-surv" data-act="sig" aria-label="ส่งสัญญาณ">สัญญาณ</button>
+      <button class="tb sm s2 r-surv r-spect r-lobby" data-act="mic" id="tMic">ไมค์</button>
     </div>
     <div class="sigs">
       <button class="tb" data-act="sig0">มาทางนี้</button>
@@ -75,6 +76,8 @@
     </div>
   </div>
 
+  <button id="fsFloat" class="fsBtn" type="button" hidden>เต็มจอ</button>
+  <div id="iosHelp" class="card" hidden><div class="card-in"><p class="sub">iPhone / iPad</p><h1 style="font-size:34px">เล่นแบบเต็มจอ</h1><p class="story">Safari บน iPhone ไม่ยอมให้เว็บขึ้นเต็มจอเอง ให้ติดตั้งเกมไว้ที่หน้าจอโฮม (ฟรี ไม่ต้องโหลดแอป):</p><ol class="steps"><li>กดปุ่ม <b>แชร์</b> (สี่เหลี่ยมมีลูกศรชี้ขึ้น) ที่แถบล่างของ Safari</li><li>เลื่อนลงแล้วเลือก <b>เพิ่มไปยังหน้าจอโฮม</b></li><li>เปิดเกมจากไอคอน <b>กระสือวัดร้าง</b> บนหน้าจอ จะเต็มจอทันที</li></ol><button class="go" id="iosHelpOk" type="button">เข้าใจแล้ว</button></div></div>
   <div id="scare" hidden><canvas id="scareC" width="256" height="256"></canvas></div>
   <div id="rotate"><p>หมุนเครื่องเป็นแนวนอนเพื่อเล่น</p></div>
 
@@ -85,8 +88,6 @@
       <p class="story">คืนนั้นพวกคุณหลงเข้ามาในวัดร้างกลางทุ่ง ประตูวัดปิดตายอยู่ข้างหลัง ต้องจุดเทียนบูชาและถวายของไหว้ที่ศาลพระภูมิ ประตูถึงจะเปิด... แต่คืนนี้มีผีออกหากิน และมันคือหนึ่งในเพื่อนของคุณ</p>
       <label class="field">ชื่อของคุณ<input class="txt" id="nameIn" maxlength="14" autocomplete="off" spellcheck="false"></label>
       <button class="small" id="lookBtn">แต่งตัว</button>
-      <button class="small touchonly fsBtn" type="button">เต็มจอ</button>
-      <p class="note" id="iosNote" hidden>iPhone เล่นเต็มจอ: กดปุ่มแชร์ของ Safari แล้วเลือก "เพิ่มไปยังหน้าจอโฮม" จากนั้นเปิดเกมจากไอคอนบนหน้าจอ</p>
       <button class="go" id="hostBtn">สร้างห้อง</button>
       <p class="or">หรือ</p>
       <div class="join">
@@ -139,7 +140,6 @@
       <div class="row">
         <button class="small" id="lobbyLook">แต่งตัว</button>
         <button class="small" id="lobbyMic">ไมค์</button>
-        <button class="small touchonly fsBtn" type="button">เต็มจอ</button>
       </div>
       <button class="go" id="startBtn" hidden>เริ่มเกม</button>
       <div class="keys desk">
@@ -191,7 +191,6 @@
         <label class="chk"><input type="checkbox" id="scareBox"> หน้าผีพุ่งเข้าจอตอนล้ม</label>
         <label class="chk desk"><input type="checkbox" id="dragLookBox"> หันด้วยการกดค้างแล้วลากเมาส์</label>
       </div>
-      <button class="small touchonly fsBtn" type="button">เต็มจอ</button>
       <button class="small" id="pauseMic">ไมค์</button>
       <button class="small" id="tipsBtn">แสดงคำแนะนำอีกครั้ง</button>
       <button class="small" id="quitBtn">ออกจากห้อง</button>

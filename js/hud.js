@@ -14,6 +14,7 @@ K.show = function(id){
   document.body.classList.toggle('lobby3d', id==='#lobbyCard');
   if(id) K.resetTouch && K.resetTouch();
   K.setRoleClass();
+  K.fsRefresh && K.fsRefresh();
 };
 K.menuMsg = function(msg, err){ const m=$('#menuMsg'); m.textContent=msg||''; m.classList.toggle('err',!!err); };
 K.flash = function(sel, v){ const e=$(sel); e.style.transition='none'; e.style.opacity=v; requestAnimationFrame(()=>{ e.style.transition='opacity .9s'; e.style.opacity=0; }); };
@@ -99,7 +100,9 @@ K.onLobby = function(m){
     const b=document.createElement('button'); b.type='button'; b.setAttribute('role','radio'); b.setAttribute('aria-checked', s===m.dawn); b.textContent=(s/60)+' นาที';
     b.disabled = !host; if(host) b.onclick=()=>K.hostSetDawn(s); db.append(b);
   }
-  $('#lobbyNote').textContent = (m.p.length<2 ? 'รอเพื่อนอย่างน้อยอีก 1 คน' : `${m.p.length} คนในห้อง`) + (host ? '' : ' · รอโฮสต์เริ่มเกม');
+  // only the host changes the room settings; everyone else just reads them in one line
+  $('#modeBox').hidden = !host; $('#dawnBox').hidden = !host;
+  $('#lobbyNote').textContent = (m.p.length<2 ? 'รอเพื่อนอย่างน้อยอีก 1 คน' : `${m.p.length} คนในห้อง`) + (host ? '' : ` · โหมด${dis?'ปลอมตัว':'ปกติ'} · ฟ้าสาง ${Math.round(m.dawn/60)} นาที · รอโฮสต์เริ่มเกม`);
   $('#startBtn').hidden = !host;
   $('#startBtn').disabled = m.p.length<2 && !K.DEBUG;
   K.onVoiceState();
@@ -304,9 +307,13 @@ K.updateHUD = function(dt){
   $('#clockT').textContent = 'ฟ้าสางใน '+K.fmtTime(G.left); $('#clockT').classList.toggle('late', G.left<=60);
   $('#ghostId').textContent = ghost ? 'คุณคือ'+gdef.name+(G.mode==='disguise'?' (ปลอมตัว)':'') : (G.mode==='disguise' ? 'ผีปลอมตัวอยู่ในกลุ่ม · ' : '')+'ผี: '+(G.known ? gdef.name : '???');
   const lit = K.ROUND.cand.filter(c=>c.lit).length, placed = K.ROUND.offers.filter(o=>o.placed).length;
-  const goals = ghost
+  const goals = ghost && K.IS_TOUCH
+    ? [[`เทียน ${lit}/${CFG.candles}`, lit>=CFG.candles], [`ของไหว้ ${placed}/${CFG.offerings}`, placed>=CFG.offerings]].concat(G.gate ? [['ประตูเปิดแล้ว!', false]] : [])
+    : ghost
     ? [['จับคนหนีให้หมดก่อนฟ้าสาง', false], [`เทียนที่ถูกจุด ${lit}/${CFG.candles}`, lit>=CFG.candles], [`ของไหว้ที่ศาล ${placed}/${CFG.offerings}`, placed>=CFG.offerings], [G.gate ? 'ประตูวัดเปิดแล้ว!' : 'ประตูวัดยังปิด', false]]
-    : [[`จุดเทียน ${lit}/${CFG.candles}`, lit>=CFG.candles], [`ของไหว้ที่ศาลพระภูมิ ${placed}/${CFG.offerings}`, placed>=CFG.offerings], [G.gate ? 'หนีออกประตูวัดทางทิศใต้' : 'ประตูวัดทางใต้ยังปิดอยู่', me.s==='escaped']];
+    : K.IS_TOUCH
+      ? [[`เทียน ${lit}/${CFG.candles}`, lit>=CFG.candles], [`ของไหว้ ${placed}/${CFG.offerings}`, placed>=CFG.offerings]].concat(G.gate ? [['ประตูเปิด! หนีไปทางใต้', me.s==='escaped']] : [])
+      : [[`จุดเทียน ${lit}/${CFG.candles}`, lit>=CFG.candles], [`ของไหว้ที่ศาลพระภูมิ ${placed}/${CFG.offerings}`, placed>=CFG.offerings], [G.gate ? 'หนีออกประตูวัดทางทิศใต้' : 'ประตูวัดทางใต้ยังปิดอยู่', me.s==='escaped']];
   $('#goal h3').textContent = ghost ? gdef.name : spect ? 'วิญญาณ' : 'คนหนี';
   $('#goal ul').innerHTML = goals.map(([s,d])=>`<li class="${d?'done':''}">${s}</li>`).join('');
   const lbl = v => v.role==='ghost' && !(G.mode==='disguise' && !ghost) ? ['ผี','ok'] : v.s==='escaped' ? ['หนีรอด','ok'] : v.s==='dead' ? ['วิญญาณ','bad'] : v.s==='down' ? [`ล้ม ${v.bl}`,'bad'] : v.h===1 ? ['บาดเจ็บ','bad'] : ['ปกติ',''];
@@ -316,6 +323,8 @@ K.updateHUD = function(dt){
 K.refreshCharmHUD = function(){
   const me = P[K.NET.me];
   const surv = me && G.role==='surv' && !K.isSpect(me);
+  document.body.classList.toggle('has-charm', !!(surv && L.ch));
+  { const b = $('#tCharm'); if(b) b.textContent = surv && L.ch ? K.CHARMS[L.ch].name : 'ของขลัง'; }
   $('#invCharm').innerHTML = surv ? (L.ch ? `ของขลัง: <b>${K.CHARMS[L.ch].name}</b>${L.ch==='takrut'?' (คุ้มครองอยู่)':K.IS_TOUCH?'':' · กด R ใช้'}` : 'ของขลัง: ไม่มี') : '';
   $('#invOffer').innerHTML = surv && L.of>=0 && K.ROUND.offers[L.of] ? `ถือ <b>${K.OFFERS[K.ROUND.offers[L.of].k]}</b> · วิ่งไม่ได้` : '';
 };
