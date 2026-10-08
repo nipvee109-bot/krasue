@@ -324,6 +324,22 @@ K.updateWorld = function(dt){
   K.flushLights();
 };
 
+/* ---------- chase music: survivors hear the ghost closing in; the ghost hears its prey getting near ---------- */
+function musicTick(dt, g, me){
+  let k = 0, chase = false;
+  if(G.inGame && G.ph==='play' && me && !L.menu){
+    if(G.role==='ghost'){
+      let d = 1e9; for(const v of Object.values(P)) if(v.role==='surv' && v.s==='alive') d = Math.min(d, Math.hypot(v.pos.x-L.pos.x, v.pos.z-L.pos.z));
+      k = clamp(1-d/10, 0, 1)*.85; chase = d<5;
+    } else if(g && (me.s==='alive' || me.s==='down')){
+      const d = Math.hypot(g.pos.x-L.pos.x, g.pos.z-L.pos.z);
+      k = clamp(1-(d-2)/(CFG.terror-2), 0, 1) * ((g.flags&8) ? .55 : 1);
+      chase = d<7 && !(g.flags&8) && !(g.flags&16);
+    }
+  }
+  K.musicUpdate(dt, k, chase);
+}
+
 /* ---------- audio per frame: heartbeat, ghost presence, crickets, distant haunts ---------- */
 let heartT = 0, cricketT = 2, hauntT = 15;
 K.updateAudio = function(dt){
@@ -335,6 +351,7 @@ K.updateAudio = function(dt){
     if(hauntT<=0){ hauntT = mr(18,45); const a = Math.random()*Math.PI*2; K.sfx.haunt(K.spatial(L.pos.x+Math.cos(a)*24, 2, L.pos.z+Math.sin(a)*24, A.amb)); }
   }
   const g = K.ghostView(), me = P[K.NET.me];
+  musicTick(dt, g, me);
   if(!g || !me || G.role==='ghost'){ A.humGain.gain.value = 0; return; }
   K.setPos(A.humPan, g.pos.x, g.pos.y, g.pos.z);
   A.humGain.gain.value = (g.flags&8) || G.ph==='wake' ? 0 : .22;

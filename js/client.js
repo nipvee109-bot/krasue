@@ -117,7 +117,7 @@ K.exitGame = function(){
   document.body.classList.remove('ghost');
   K.$('#hudWrap').hidden = true; K.$('#hurt').style.opacity=0; K.$('#flash').style.opacity=0;
   K.SPOTS[0].light.intensity=0; K.SPOTS[0].beam.visible=false; K.handTorch.visible=false;
-  if(K.A.ctx) K.A.humGain.gain.value=0;
+  if(K.A.ctx){ K.A.humGain.gain.value=0; K.musicStop(); }
   K.releasePointer && K.releasePointer();
   K.setVision();
   clearRound();

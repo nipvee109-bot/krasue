@@ -43,6 +43,57 @@ K.audioInit = function(){
     const v = ctx.createOscillator(); v.frequency.value=.3; const vd = ctx.createGain(); vd.gain.value=40; v.connect(vd); vd.connect(o.frequency); v.start();
     const og = ctx.createGain(); og.gain.value=.12; o.connect(og); og.connect(g); o.start();
   }
+  initMusic(ctx, buf);
+};
+
+/* ---------- chase music: layers fade in as the ghost closes in ----------
+   drone (anything near) -> dissonant tremolo strings (close) -> drums (being chased) */
+const M = K.MUS = {k:0, chase:false, beat:0, stingAt:-99};
+function initMusic(ctx, buf){
+  M.bus = ctx.createGain(); M.bus.gain.value = .9; M.bus.connect(A.amb);
+  // drone: two detuned saws through a slow-opening lowpass
+  M.drone = ctx.createGain(); M.drone.gain.value = 0; M.drone.connect(M.bus);
+  M.droneF = ctx.createBiquadFilter(); M.droneF.type='lowpass'; M.droneF.frequency.value=140; M.droneF.Q.value=3; M.droneF.connect(M.drone);
+  for(const f of [55, 55.7, 82.4]){ const o=ctx.createOscillator(); o.type='sawtooth'; o.frequency.value=f; const g=ctx.createGain(); g.gain.value=.09; o.connect(g); g.connect(M.droneF); o.start(); }
+  // strings: a minor second rubbing against itself, trembling
+  M.str = ctx.createGain(); M.str.gain.value = 0; M.str.connect(M.bus);
+  const trem = ctx.createGain(); trem.gain.value = .5; trem.connect(M.str);
+  const lfo = ctx.createOscillator(); lfo.frequency.value = 7.5; const lg = ctx.createGain(); lg.gain.value = .5; lfo.connect(lg); lg.connect(trem.gain); lfo.start();
+  const sf = ctx.createBiquadFilter(); sf.type='bandpass'; sf.frequency.value=900; sf.Q.value=.8; sf.connect(trem);
+  for(const f of [466.2, 493.9, 233.1]){ const o=ctx.createOscillator(); o.type='sawtooth'; o.frequency.value=f; const v=ctx.createOscillator(); v.frequency.value=mr(4,6); const vd=ctx.createGain(); vd.gain.value=f*.006; v.connect(vd); vd.connect(o.frequency); v.start(); const g=ctx.createGain(); g.gain.value=.035; o.connect(g); g.connect(sf); o.start(); }
+  // drums are scheduled hits (see K.musicUpdate)
+  M.drum = ctx.createGain(); M.drum.gain.value = 0; M.drum.connect(M.bus);
+}
+function drumHit(t, accent){
+  const c = A.ctx;
+  const o = c.createOscillator(), g = c.createGain(); o.type='sine';
+  o.frequency.setValueAtTime(accent?95:80, t); o.frequency.exponentialRampToValueAtTime(38, t+.35);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(accent?.9:.6, t+.008); g.gain.exponentialRampToValueAtTime(.001, t+.45);
+  o.connect(g); g.connect(M.drum); o.start(t); o.stop(t+.5);
+  const s = c.createBufferSource(); s.buffer = A.noise; const f = c.createBiquadFilter(); f.type='lowpass'; f.frequency.value = accent?900:500;
+  const ng = c.createGain(); ng.gain.setValueAtTime(accent?.35:.2, t); ng.gain.exponentialRampToValueAtTime(.001, t+.12);
+  s.connect(f); f.connect(ng); ng.connect(M.drum); s.start(t, Math.random()); s.stop(t+.15);
+}
+K.musicStop = function(){ if(!M.bus) return; M.k = 0; M.chase = false; for(const g of [M.drone, M.str, M.drum]) g.gain.value = 0; };
+/* k: 0..1 how close the danger is; chase: someone is right on top of you */
+K.musicUpdate = function(dt, k, chase){
+  if(!A.ctx || !M.bus) return;
+  const now = A.ctx.currentTime;
+  M.k += (k-M.k)*Math.min(1, dt*(k>M.k?2.5:.8));        // swells fast, lingers on the way out
+  const kk = M.k;
+  M.drone.gain.setTargetAtTime(Math.min(1, kk*1.6)*.55, now, .1);
+  M.droneF.frequency.setTargetAtTime(140+kk*520, now, .2);
+  M.str.gain.setTargetAtTime(Math.max(0, kk-.35)/.65*.5, now, .1);
+  const drumOn = chase || kk>.72;
+  M.drum.gain.setTargetAtTime(drumOn ? .55 : 0, now, drumOn ? .05 : .6);
+  if(drumOn && !M.chase && now-M.stingAt>12){ M.stingAt = now; K.sfx.sting(); }
+  M.chase = drumOn;
+  // keep a few beats scheduled ahead; tempo rises with danger
+  if(kk>.5){
+    const step = 60/(118+kk*40)/2;
+    if(M.beat < now) M.beat = now+.05;
+    while(M.beat < now+.2){ const n = M.bi = ((M.bi||0)+1)%8; if(n===0||n===3||n===6||(kk>.85&&n===7)) drumHit(M.beat, n===0); M.beat += step; }
+  }
 };
 /* phones suspend (iOS: "interrupt") the audio context after a call, a lock screen or an app switch; wake it on the next touch */
 for(const ev of ['pointerdown','keydown']) addEventListener(ev, ()=>{ if(A.ctx && A.ctx.state!=='running') A.ctx.resume().catch(()=>{}); }, {capture:true, passive:true});
