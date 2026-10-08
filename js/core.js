@@ -32,7 +32,7 @@ if(K.params.has('notouch')) K.IS_TOUCH = false;
 
 /* ---------- tuning ---------- */
 K.CFG = {
-  walk:3.0, run:5.4, carry:2.5, crouch:1.7, crouchEye:1.0, scuffTime:6, lunge:8.5, lungeTime:.45, R:.3, eye:1.6,
+  walk:3.0, run:5.4, carry:2.5, crouch:1.7, crouchEye:1.0, scuffTime:6, rage:1.08, lunge:8.5, lungeTime:.45, R:.3, eye:1.6,
   stamDrain:24, stamRegen:13, batDrain:.6, batPick:50, batRespawn:45,
   candles:4, offerings:2, charms:6,
   candleTime:7, placeTime:2, reviveTime:4, finishTime:3, bleed:60, wake:15,

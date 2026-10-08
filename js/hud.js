@@ -259,6 +259,7 @@ K.updateHUD = function(dt){
   else if(ghost && (me.flags&16)){ st = 'มึน!'; bad = true; }
   else if(ghost && (me.flags&256)) st = gdef.skillName;
   else if(ghost && (me.flags&8)) st = 'กำลังหายตัว';
+  else if(ghost && G.gate && G.ph==='play') st = 'คลั่ง! เร็วขึ้น';
   else if(!ghost && (me.flags&128)){ st = 'ขาสั่น เดินช้าลง'; bad = true; }
   else if(!ghost && me.h===1){ st = 'บาดเจ็บ' + (L.crouch ? ' · ย่อตัวอยู่' : ''); bad = true; }
   else if(!ghost && L.crouch) st = 'ย่อตัว เดินเงียบ' + (K.IS_TOUCH ? '' : ' (C ยืนขึ้น)');

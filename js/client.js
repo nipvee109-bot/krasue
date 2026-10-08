@@ -305,9 +305,14 @@ function onEvent(m){
     case 'wake':
       if(ghost) K.toast('ออกหากินได้แล้ว'); else { K.toast('ผีตื่นแล้ว...'); const g=K.ghostView(); if(g) ghostVoice(g); }
       break;
-    case 'lit': sfx.bell(); K.toast(`จุดเทียนแล้ว ${m.n}/${CFG.candles} เล่ม`); break;
+    case 'lit': {
+      sfx.bell(); K.toast(`จุดเทียนแล้ว ${m.n}/${CFG.candles} เล่ม`);
+      const c = R.cand[m.i];   // the ghost feels each candle catch, and where
+      if(ghost && c) marker('เทียนถูกจุด', '#ffb050', c.x, 1.8, c.z, 4);
+      break;
+    }
     case 'placed': sfx.place(); K.toast(`วางของไหว้ที่ศาลแล้ว ${m.n}/${CFG.offerings} ชิ้น`); break;
-    case 'gate': sfx.gate(); K.toast(ghost ? 'ประตูวัดเปิดแล้ว อย่าให้ใครหนีไปได้' : 'ประตูวัดเปิดแล้ว! วิ่งออกไปทางทิศใต้', 5); break;
+    case 'gate': sfx.gate(); K.toast(ghost ? 'ประตูวัดเปิดแล้ว! คุณคลั่ง เร็วขึ้นกว่าเดิม อย่าให้ใครหนีไปได้' : 'ประตูวัดเปิดแล้ว! วิ่งออกไปทางทิศใต้ ผีคลั่งแล้ว ระวัง!', 5); if(!ghost) setTimeout(()=>{ const g=K.ghostView(); if(g && G.inGame) K.sfx.shriek(K.at(g.pos)); }, 1200); break;
     case 'hit':
       if(m.who===K.NET.me){ sfx.hit(); K.flash('#hurt',.9); L.boostUntil = K.gameTime+1.8; K.toast('โดนตะครุบ! วิ่ง!'); revealGhost(); K.vibrate(120); }
       else { if(ghost) sfx.hit(); else if(P[m.who]) sfx.down(at(P[m.who].pos)); }

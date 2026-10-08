@@ -145,7 +145,7 @@ K.updateLocal = function(dt){
     const stunned = me.flags&16;
     if(G.ph==='wake' || stunned) speed = 0;
     else if(K.gameTime<L.lungeUntil){ vx=-Math.sin(L.lungeYaw); vz=-Math.cos(L.lungeYaw); speed=CFG.lunge; il=1; }
-    else speed = gdef.speed * ((me.flags&8)?1.1:1) * (me.cd>CFG.missCD+.05 ? .55 : 1);
+    else speed = gdef.speed * ((me.flags&8)?1.1:1) * (me.cd>CFG.missCD+.05 ? .55 : 1) * (G.gate ? CFG.rage : 1);   // enraged once the gate opens
   } else {
     const moving = il>.05;
     const carrying = L.of>=0;
