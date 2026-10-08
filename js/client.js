@@ -13,7 +13,7 @@ K.isSpect = isSpect;
 /* disguise mode: the ghost passes as a person (and is not mid-transformation) */
 const masked = v => !!v && v.role==='ghost' && (v.flags&1024) && !(v.flags&2048);
 K.masked = masked;
-K.voiceIds = () => G.inGame ? Object.keys(P) : (K.LOBBY ? K.LOBBY.p.map(p=>p.i) : []);
+K.voiceIds = () => G.inGame ? Object.keys(P).filter(i=>i!=='bot') : (K.LOBBY ? K.LOBBY.p.map(p=>p.i) : []);
 
 K.clientRecv = function(m){
   switch(m.t){

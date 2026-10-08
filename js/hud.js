@@ -66,14 +66,14 @@ K.onLobby = function(m){
   if(!K.lookOpen()) K.show('#lobbyCard');
   $('#roomCode').textContent = m.code;
   const host = K.NET.isHost, ul = $('#plist'); ul.innerHTML='';
-  const dis = m.mode==='disguise';
+  const dis = m.mode==='disguise', bot = !!m.bot;
   for(const p of m.p){
     const li = document.createElement('li');
     const sw = document.createElement('span'); sw.className='sw'; sw.style.background=(p.look&&p.look.c)||'#888';
     const nm = document.createElement('span'); nm.className='nm'; nm.textContent = p.n + (p.i===m.host?' (โฮสต์)':'') + (p.i===K.NET.me?' · คุณ':'');
     const tag = document.createElement('span'); tag.className='tag'+(m.ghost===p.i?' g':''); tag.textContent = m.ghost===p.i ? 'ผีรอบหน้า' : (p.gc && !dis ? `เคยเป็นผี ${p.gc}` : '');
     li.append(sw,nm,tag);
-    if(host && m.p.length>1 && !dis){
+    if(host && m.p.length>1 && !dis && !bot){
       const b = document.createElement('button'); b.className='small';
       const forced = m.picked && m.ghost===p.i;
       b.textContent = forced ? 'ยกเลิก' : 'ให้เป็นผี';
@@ -83,16 +83,21 @@ K.onLobby = function(m){
     ul.append(li);
   }
   const names = m.queue.map(id=>{ const p=m.p.find(q=>q.i===id); return p ? (id===K.NET.me?'คุณ':p.n) : '?'; });
-  $('#queueNote').textContent = dis ? 'ผีจะถูกสุ่มตอนเริ่มเกม ไม่มีใครรู้ว่าใคร' : m.p.length>1 ? 'คิวผี: '+names.join(' → ') : '';
-  $('#ghostPick').hidden = !(dis || m.ghost===K.NET.me) || m.p.length<2 && !K.DEBUG;
+  $('#queueNote').textContent = bot ? 'ผีเป็นบอท ทุกคนในห้องเป็นคนหนีด้วยกัน' : dis ? 'ผีจะถูกสุ่มตอนเริ่มเกม ไม่มีใครรู้ว่าใคร' : m.p.length>1 ? 'คิวผี: '+names.join(' → ') : '';
+  $('#ghostPick').hidden = bot || !(dis || m.ghost===K.NET.me) || m.p.length<2 && !K.DEBUG;
   $('#ghostPick .label').textContent = dis ? 'ถ้าคุณถูกสุ่มเป็นผี จะใช้ร่างไหน (คนอื่นไม่รู้)' : 'รอบหน้าคุณเป็นผี เลือกร่าง (คนหนีจะไม่รู้จนกว่าจะเจอ)';
   // mode
+  const bb = $('#botBtns'); bb.innerHTML='';
+  for(const [k,name] of [[false,'เพื่อนในห้อง'],[true,'บอท (คอมคุม)']]){
+    const b=document.createElement('button'); b.type='button'; b.setAttribute('role','radio'); b.setAttribute('aria-checked', bot===k); b.textContent=name;
+    b.disabled = !host; if(host) b.onclick=()=>K.hostSetBot(k); bb.append(b);
+  }
   const mb = $('#modeBtns'); mb.innerHTML='';
   for(const [k,name] of [['normal','ปกติ'],['disguise','ปลอมตัว']]){
     const b=document.createElement('button'); b.type='button'; b.setAttribute('role','radio'); b.setAttribute('aria-checked', (m.mode||'normal')===k); b.textContent=name;
-    b.disabled = !host; if(host) b.onclick=()=>K.hostSetMode(k); mb.append(b);
+    b.disabled = !host || bot; if(host) b.onclick=()=>K.hostSetMode(k); mb.append(b);
   }
-  $('#modeNote').textContent = dis ? 'ผีเริ่มเกมปนอยู่กับทุกคนในร่างของตัวเอง เดิน คุย ส่องไฟได้เหมือนคน แล้วค่อยกลายร่างออกล่า ใครเป็นผีต้องจับสังเกตเอาเอง' : 'ทุกคนรู้ว่าใครเป็นผี ผีเริ่มในโบสถ์ คนหนีได้เวลาซ่อน 15 วิ';
+  $('#modeNote').textContent = bot ? 'บอทเป็นผี เล่นคนเดียวก็ได้ (โหมดปลอมตัวใช้กับบอทไม่ได้)' : dis ? 'ผีเริ่มเกมปนอยู่กับทุกคนในร่างของตัวเอง เดิน คุย ส่องไฟได้เหมือนคน แล้วค่อยกลายร่างออกล่า ใครเป็นผีต้องจับสังเกตเอาเอง' : 'ทุกคนรู้ว่าใครเป็นผี ผีเริ่มในโบสถ์ คนหนีได้เวลาซ่อน 15 วิ';
   K.renderGhostPick();
   // dawn
   const db = $('#dawnBtns'); db.innerHTML='';
@@ -102,9 +107,9 @@ K.onLobby = function(m){
   }
   // only the host changes the room settings; everyone else just reads them in one line
   $('#modeBox').hidden = !host; $('#dawnBox').hidden = !host;
-  $('#lobbyNote').textContent = (m.p.length<2 ? 'รอเพื่อนอย่างน้อยอีก 1 คน' : `${m.p.length} คนในห้อง`) + (host ? '' : ` · โหมด${dis?'ปลอมตัว':'ปกติ'} · ฟ้าสาง ${Math.round(m.dawn/60)} นาที · รอโฮสต์เริ่มเกม`);
+  $('#lobbyNote').textContent = (m.p.length<2 && !bot ? 'รอเพื่อนอย่างน้อยอีก 1 คน หรือเลือกผีเป็นบอท' : `${m.p.length} คนในห้อง`) + (host ? '' : ` · ${bot?'ผีบอท':'โหมด'+(dis?'ปลอมตัว':'ปกติ')} · ฟ้าสาง ${Math.round(m.dawn/60)} นาที · รอโฮสต์เริ่มเกม`);
   $('#startBtn').hidden = !host;
-  $('#startBtn').disabled = m.p.length<2 && !K.DEBUG;
+  $('#startBtn').disabled = m.p.length<(bot?1:2) && !K.DEBUG;
   K.onVoiceState();
   K.lobby3d.sync(m);
 };

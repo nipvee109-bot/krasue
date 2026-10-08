@@ -116,7 +116,8 @@ K.lobby3d = {
       o.host = p.i===m.host;
     });
     shade.id = m.ghost && PEOPLE[m.ghost] ? m.ghost : null;
-    shade.roam = m.mode==='disguise' && ids.length>1;   // nobody knows who: the shadow drifts from one to the next
+    shade.roam = m.mode==='disguise' && ids.length>1 && !m.bot;
+    shade.gate = !!m.bot;   // the bot waits in the gateway   // nobody knows who: the shadow drifts from one to the next
   },
   active(){ return !G.inGame && !K.$('#lobbyCard').hidden; },
   clear(){ for(const id of Object.keys(PEOPLE)){ const o = PEOPLE[id]; K.disposeTree(o.v.g); K.disposeTree(o.label); delete PEOPLE[id]; } lobbyRef = null; },
@@ -153,7 +154,13 @@ K.lobby3d = {
       shade.rt = (shade.rt||0) - dt;
       if(shade.rt<=0){ const ids = Object.keys(PEOPLE).filter(i=>i!==shade.id); shade.id = ids[Math.random()*ids.length|0]; shade.rt = mr(4,8); shade.k = 0; }
     }
-    if(shade.id && PEOPLE[shade.id]){
+    if(shade.gate){
+      shade.g.visible = true; shade.k = Math.min(1, shade.k+dt*.4);
+      const lean = .5+.5*Math.sin(t*.5);
+      shade.g.position.set(0, 0, -3.9+lean*.3); shade.g.rotation.y = 0;
+      shade.m.opacity = .7*shade.k; shade.em.color.setRGB((.6+.4*lean)*shade.k, .16*shade.k, .1*shade.k);
+      fill.position.set(0, 2, -3); fill.intensity = (.5+.4*lean)*shade.k;
+    } else if(shade.id && PEOPLE[shade.id]){
       const o = PEOPLE[shade.id];
       shade.g.visible = true; shade.k = Math.min(1, shade.k+dt*.5);
       const lean = .5+.5*Math.sin(t*.6);
