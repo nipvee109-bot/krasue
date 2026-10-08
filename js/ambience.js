@@ -353,7 +353,7 @@ K.updateAmbience = function(dt){
   // dread: darker edges, heavier grain, a flickering torch when the ghost is close
   let fear = 0;
   const me = P[K.NET.me], g = K.ghostView();
-  if(G.inGame && G.role==='surv' && me && (me.s==='alive'||me.s==='down') && g && G.ph==='play' && !(g.flags&8)){
+  if(G.inGame && G.role==='surv' && me && (me.s==='alive'||me.s==='down') && g && G.ph==='play' && !(g.flags&8) && !K.masked(g)){
     const d = g.pos.distanceTo(new V3(L.pos.x, g.pos.y, L.pos.z));
     fear = clamp(1-(d-3)/12, 0, 1);
   }

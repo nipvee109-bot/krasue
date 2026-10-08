@@ -139,6 +139,8 @@ function hut(cx,cz,back){
   block(MAT.wood,cx+1.4,cz+(back?.6:-1.5),.8,.5,1.1);
   K.HUTS.push({cx,cz});
 }
+/* inside the hall or a hut (the เปรต can't stand up in there) */
+K.indoors = (x,z) => (x>-5 && x<5 && z>-20 && z<-6) || K.HUTS.some(h=>Math.abs(x-h.cx)<2 && Math.abs(z-h.cz)<2);
 hut(-18,-16,true); hut(-11,-19,false); hut(-20.5,9.2,true); hut(19.5,1,true);
 
 /* เจดีย์ (stupa) */

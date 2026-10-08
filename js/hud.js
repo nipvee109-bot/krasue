@@ -26,6 +26,8 @@ K.setRoleClass = function(){
   const role = !G.inGame ? null : (K.isSpect(me) ? 'spect' : G.role==='ghost' ? 'ghost' : 'surv');
   b.classList.toggle('role-surv', role==='surv'); b.classList.toggle('role-ghost', role==='ghost'); b.classList.toggle('role-spect', role==='spect');
   b.classList.toggle('ingame', G.inGame);
+  b.classList.toggle('disg', !!G.disg);
+  { const a = $('[data-act=atk]'); if(a) a.textContent = G.disg ? 'กลายร่าง' : 'ตะครุบ'; }
   $('#touch').hidden = !(K.IS_TOUCH && G.inGame && !L.menu);
 };
 
@@ -63,13 +65,14 @@ K.onLobby = function(m){
   if(!K.lookOpen()) K.show('#lobbyCard');
   $('#roomCode').textContent = m.code;
   const host = K.NET.isHost, ul = $('#plist'); ul.innerHTML='';
+  const dis = m.mode==='disguise';
   for(const p of m.p){
     const li = document.createElement('li');
     const sw = document.createElement('span'); sw.className='sw'; sw.style.background=(p.look&&p.look.c)||'#888';
     const nm = document.createElement('span'); nm.className='nm'; nm.textContent = p.n + (p.i===m.host?' (โฮสต์)':'') + (p.i===K.NET.me?' · คุณ':'');
-    const tag = document.createElement('span'); tag.className='tag'+(m.ghost===p.i?' g':''); tag.textContent = m.ghost===p.i ? 'ผีรอบหน้า' : (p.gc ? `เคยเป็นผี ${p.gc}` : '');
+    const tag = document.createElement('span'); tag.className='tag'+(m.ghost===p.i?' g':''); tag.textContent = m.ghost===p.i ? 'ผีรอบหน้า' : (p.gc && !dis ? `เคยเป็นผี ${p.gc}` : '');
     li.append(sw,nm,tag);
-    if(host && m.p.length>1){
+    if(host && m.p.length>1 && !dis){
       const b = document.createElement('button'); b.className='small';
       const forced = m.picked && m.ghost===p.i;
       b.textContent = forced ? 'ยกเลิก' : 'ให้เป็นผี';
@@ -79,8 +82,16 @@ K.onLobby = function(m){
     ul.append(li);
   }
   const names = m.queue.map(id=>{ const p=m.p.find(q=>q.i===id); return p ? (id===K.NET.me?'คุณ':p.n) : '?'; });
-  $('#queueNote').textContent = m.p.length>1 ? 'คิวผี: '+names.join(' → ') : '';
-  $('#ghostPick').hidden = m.ghost!==K.NET.me || m.p.length<2 && !K.DEBUG;
+  $('#queueNote').textContent = dis ? 'ผีจะถูกสุ่มตอนเริ่มเกม ไม่มีใครรู้ว่าใคร' : m.p.length>1 ? 'คิวผี: '+names.join(' → ') : '';
+  $('#ghostPick').hidden = !(dis || m.ghost===K.NET.me) || m.p.length<2 && !K.DEBUG;
+  $('#ghostPick .label').textContent = dis ? 'ถ้าคุณถูกสุ่มเป็นผี จะใช้ร่างไหน (คนอื่นไม่รู้)' : 'รอบหน้าคุณเป็นผี เลือกร่าง (คนหนีจะไม่รู้จนกว่าจะเจอ)';
+  // mode
+  const mb = $('#modeBtns'); mb.innerHTML='';
+  for(const [k,name] of [['normal','ปกติ'],['disguise','ปลอมตัว']]){
+    const b=document.createElement('button'); b.type='button'; b.setAttribute('role','radio'); b.setAttribute('aria-checked', (m.mode||'normal')===k); b.textContent=name;
+    b.disabled = !host; if(host) b.onclick=()=>K.hostSetMode(k); mb.append(b);
+  }
+  $('#modeNote').textContent = dis ? 'ผีเริ่มเกมปนอยู่กับทุกคนในร่างของตัวเอง เดิน คุย ส่องไฟได้เหมือนคน แล้วค่อยกลายร่างออกล่า ใครเป็นผีต้องจับสังเกตเอาเอง' : 'ทุกคนรู้ว่าใครเป็นผี ผีเริ่มในโบสถ์ คนหนีได้เวลาซ่อน 15 วิ';
   K.renderGhostPick();
   // dawn
   const db = $('#dawnBtns'); db.innerHTML='';
@@ -199,7 +210,14 @@ function tipCheck(me){
   if(!G.inGame || G.ph==='end' || L.menu) return;
   const lit = K.ROUND.cand.filter(c=>c.lit).length;
   const friendDown = Object.values(P).some(v=>v.id!==K.NET.me && v.role==='surv' && v.s==='down');
+  if(G.mode==='disguise'){
+    if(G.role==='ghost'){
+      if(G.disg) tip('gdis', `คุณปลอมตัวเป็นคนอยู่ เดินคุยไปกับเพื่อนให้เนียน แอบแยกคนที่อยู่คนเดียว แล้ว${kb('คลิก','กดปุ่มกลายร่าง')}เพื่อกลายร่าง`);
+      else if(G.ph==='play') tip('ghunt2', `ได้ร่างผีแล้ว! ${kb('คลิก','กดปุ่มตะครุบ')}เพื่อตะครุบ ก่อนร่างผีหมดเวลาแล้วต้องกลับไปปลอมตัว`);
+    } else if(me.s==='alive' && G.ph==='play') tip('sdis', `ผีปลอมตัวอยู่ในกลุ่ม! ถ้ามีใครจุดเทียนแล้วเทียนไม่ขึ้น หรือตอนฟ้าแลบตาเป็นสีแดง นั่นแหละผี ปาเกลือใส่${kb(' (R)','')}จะบังคับให้มันเผยร่าง`);
+  }
   if(G.role==='ghost'){
+    if(G.disg || G.mode==='disguise') return;
     if(G.ph==='wake') tip('gwake', `คุณเป็นผี! รอ 15 วินาทีให้คนหนีซ่อนก่อน แล้ว${kb('คลิก','กดปุ่มตะครุบ')}เพื่อพุ่งตะครุบ ${kb('กด Q','กดปุ่มสกิล')} ใช้พลังพิเศษ`);
     else tip('ghunt', 'ตามหาคนหนีจากแสงไฟฉาย เสียงเทียนที่จุดพลาด และรอยแดงบนพื้นที่คนวิ่งทิ้งไว้');
     if(friendDown) tip('gfinish', `มีคนล้มแล้ว! เข้าไป${kb('กด E ค้าง','กดปุ่มสูบค้าง')}ที่ตัวเพื่อสูบวิญญาณ ก่อนเพื่อนมันมาช่วย`);
@@ -224,7 +242,11 @@ K.updateHUD = function(dt){
   const me = P[K.NET.me]; if(!me) return;
   const ghost = G.role==='ghost', spect = K.isSpect(me);
   const gdef = GHOSTS[G.gk];
-  if(ghost){
+  if(ghost && G.mode==='disguise' && (G.disg || (me.flags&2048))){
+    $('#barALabel').textContent = 'กลายร่าง'+(K.IS_TOUCH?'':' (คลิก)'); $('#barBLabel').textContent='แรง';
+    $('#barA').style.width = (100*(1-clamp((me.fr||0)/CFG.formCD,0,1)))+'%'; $('#barA').classList.toggle('low', me.fr>0);
+    $('#barB').style.width = L.stamina+'%'; $('#barB').classList.toggle('low', L.exhausted);
+  } else if(ghost){
     $('#barALabel').textContent = gdef.skillName.length>8 ? 'สกิล'+(K.IS_TOUCH?'':' Q') : gdef.skillName+(K.IS_TOUCH?'':' Q'); $('#barBLabel').textContent='ตะครุบ';
     $('#barA').style.width = (100*(1-clamp(me.sq/(gdef.skillTime+gdef.skillCD),0,1)))+'%';
     $('#barB').style.width = (100*(1-clamp(me.cd/CFG.hitCD,0,1)))+'%';
@@ -254,11 +276,14 @@ K.updateHUD = function(dt){
   drawSC();
   // status line
   let st = '', bad = false;
-  if(G.ph==='wake') st = ghost ? `กำลังตื่น... ${G.wake}` : `หนีไปซ่อน! ผีจะตื่นใน ${G.wake}`;
+  if(G.ph==='wake') st = G.mode==='disguise' ? (ghost ? `ทำตัวให้เนียน · ออกล่าได้ใน ${G.wake}` : `ผีจะตื่นใน ${G.wake} · มันปนอยู่ในกลุ่มพวกคุณ`) : ghost ? `กำลังตื่น... ${G.wake}` : `หนีไปซ่อน! ผีจะตื่นใน ${G.wake}`;
   else if(me.s==='down'){ st = `ล้ม · รอเพื่อนช่วย ${me.bl} วิ` + (me.fn>0?' · กำลังถูกสูบวิญญาณ!':''); bad = true; }
   else if(me.s==='dead') st = 'คุณเป็นวิญญาณ · ผีมองไม่เห็นคุณ' + (K.IS_TOUCH ? '' : ' (Space ขึ้น / Shift ลง)');
   else if(me.s==='escaped') st = 'คุณหนีรอดแล้ว · ลอยดูเพื่อนได้' + (K.IS_TOUCH ? '' : ' (Space ขึ้น / Shift ลง)');
+  else if(ghost && (me.flags&2048)){ st = 'กำลังกลายร่าง...'; bad = true; }
+  else if(ghost && G.disg) st = 'ปลอมตัวอยู่ · ' + (me.fr>0 ? `กลายร่างได้ในอีก ${Math.ceil(me.fr)} วิ` : 'กลายร่างได้แล้ว') + (L.crouch ? ' · ย่อตัว' : '');
   else if(ghost && (me.flags&16)){ st = 'มึน!'; bad = true; }
+  else if(ghost && G.mode==='disguise' && me.fu>0 && G.ph==='play') st = `ร่างผีเหลือ ${Math.ceil(me.fu)} วิ` + ((me.flags&256) ? ' · '+gdef.skillName : '');
   else if(ghost && (me.flags&256)) st = gdef.skillName;
   else if(ghost && (me.flags&8)) st = 'กำลังหายตัว';
   else if(ghost && G.gate && G.ph==='play') st = 'คลั่ง! เร็วขึ้น';
@@ -277,14 +302,14 @@ K.updateHUD = function(dt){
   teamT -= dt; if(teamT>0) return; teamT = .25;
   tipCheck(me);
   $('#clockT').textContent = 'ฟ้าสางใน '+K.fmtTime(G.left); $('#clockT').classList.toggle('late', G.left<=60);
-  $('#ghostId').textContent = ghost ? 'คุณคือ'+gdef.name : 'ผี: '+(G.known ? gdef.name : '???');
+  $('#ghostId').textContent = ghost ? 'คุณคือ'+gdef.name+(G.mode==='disguise'?' (ปลอมตัว)':'') : (G.mode==='disguise' ? 'ผีปลอมตัวอยู่ในกลุ่ม · ' : '')+'ผี: '+(G.known ? gdef.name : '???');
   const lit = K.ROUND.cand.filter(c=>c.lit).length, placed = K.ROUND.offers.filter(o=>o.placed).length;
   const goals = ghost
     ? [['จับคนหนีให้หมดก่อนฟ้าสาง', false], [`เทียนที่ถูกจุด ${lit}/${CFG.candles}`, lit>=CFG.candles], [`ของไหว้ที่ศาล ${placed}/${CFG.offerings}`, placed>=CFG.offerings], [G.gate ? 'ประตูวัดเปิดแล้ว!' : 'ประตูวัดยังปิด', false]]
     : [[`จุดเทียน ${lit}/${CFG.candles}`, lit>=CFG.candles], [`ของไหว้ที่ศาลพระภูมิ ${placed}/${CFG.offerings}`, placed>=CFG.offerings], [G.gate ? 'หนีออกประตูวัดทางทิศใต้' : 'ประตูวัดทางใต้ยังปิดอยู่', me.s==='escaped']];
   $('#goal h3').textContent = ghost ? gdef.name : spect ? 'วิญญาณ' : 'คนหนี';
   $('#goal ul').innerHTML = goals.map(([s,d])=>`<li class="${d?'done':''}">${s}</li>`).join('');
-  const lbl = v => v.role==='ghost' ? ['ผี','ok'] : v.s==='escaped' ? ['หนีรอด','ok'] : v.s==='dead' ? ['วิญญาณ','bad'] : v.s==='down' ? [`ล้ม ${v.bl}`,'bad'] : v.h===1 ? ['บาดเจ็บ','bad'] : ['ปกติ',''];
+  const lbl = v => v.role==='ghost' && !(G.mode==='disguise' && !ghost) ? ['ผี','ok'] : v.s==='escaped' ? ['หนีรอด','ok'] : v.s==='dead' ? ['วิญญาณ','bad'] : v.s==='down' ? [`ล้ม ${v.bl}`,'bad'] : v.h===1 ? ['บาดเจ็บ','bad'] : ['ปกติ',''];
   $('#team ul').innerHTML = Object.values(P).map(v=>{ const [s,c]=lbl(v); return `<li><span class="sw" style="background:${v.color}"></span><span>${esc(v.name)}${v.id===K.NET.me?' (คุณ)':''}</span><span class="st ${c}">${s}</span></li>`; }).join('');
   K.refreshCharmHUD();
 };

@@ -167,14 +167,49 @@ touchEl.addEventListener('pointerup', endPointer);
 touchEl.addEventListener('pointercancel', endPointer);
 K.resetTouch = function(){ T.stick=null; T.look=null; K.IN.mx=0; K.IN.my=0; K.IN.run=false; K.IN.fly=0; keys.TouchUse=false; L.autoHold=null; stickEl.hidden=true; for(const id in btnDown){ btnDown[id].classList.remove('on'); delete btnDown[id]; } };
 
-/* on phones: go full screen, hold landscape, keep the screen awake */
+/* on phones: go full screen, hold landscape, keep the screen awake.
+   Browsers only allow full screen from a tap, so every tap on a phone tries again until it sticks
+   (it drops out after an app switch or the back gesture). iPhones have no full screen for pages:
+   there the game runs full screen when opened from a home-screen icon (see manifest.webmanifest). */
 let wakeLock = null;
+const docEl = document.documentElement;
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+const fsReq = docEl.requestFullscreen ? o=>docEl.requestFullscreen(o) : docEl.webkitRequestFullscreen ? ()=>docEl.webkitRequestFullscreen() : null;
+const standalone = (window.matchMedia && matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) || navigator.standalone;
+K.canFullscreen = !!fsReq && !standalone;
+let fsOff = K.store.get('fsOff', false);   // the player turned it off with the button: respect that
+let fsPending = false;
+K.goFullscreen = async function(){
+  if(!fsReq || fsEl() || fsPending) return;
+  fsPending = true;
+  try{ await fsReq({navigationUI:'hide'}); }catch(e){}
+  fsPending = false;
+  try{ if(screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape'); }catch(e){}
+};
 K.enterMobile = async function(){
   if(!K.IS_TOUCH) return;
-  try{ if(!document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen({navigationUI:'hide'}); }catch(e){}
-  try{ if(screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape'); }catch(e){}
+  if(!fsOff) await K.goFullscreen();
   K.keepAwake();
 };
+if(K.IS_TOUCH){
+  for(const ev of ['pointerup','touchend']) addEventListener(ev, e=>{
+    if(fsOff || fsEl() || !fsReq || standalone) return;
+    if(e.target && e.target.closest && e.target.closest('input, .fsBtn')) return;   // don't fight the keyboard while typing a name
+    K.goFullscreen();
+  }, {capture:true, passive:true});
+}
+function fsLabel(){ for(const b of K.$$('.fsBtn')){ b.textContent = fsEl() ? 'ออกจากเต็มจอ' : 'เต็มจอ'; b.hidden = !K.canFullscreen; } }
+for(const b of K.$$('.fsBtn')) b.addEventListener('click', async ()=>{
+  if(fsEl()){ fsOff = true; K.store.set('fsOff', true); try{ await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen()); }catch(e){} }
+  else { fsOff = false; K.store.set('fsOff', false); await K.goFullscreen(); }
+  fsLabel();
+});
+for(const ev of ['fullscreenchange','webkitfullscreenchange']) document.addEventListener(ev, ()=>{ fsLabel(); setTimeout(K.resize, 120); });
+fsLabel();
+{ // iPhone in Safari: tell them how to get full screen
+  const ios = /iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1 && !fsReq);
+  const n = K.$('#iosNote'); if(n) n.hidden = !(ios && !standalone && !fsReq);
+}
 K.keepAwake = async function(){
   try{ if('wakeLock' in navigator && !wakeLock){ wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', ()=>{ wakeLock = null; }); } }catch(e){}
 };

@@ -43,7 +43,9 @@ K.CFG = {
   voiceRange:15,
   holyTime:15, holyWidth:3.4, saltRange:9,
   signalCD:3, wispCD:10, scFailLoss:.15, scBonus:.05, noiseTime:6,
-  maxPlayers:6
+  maxPlayers:6,
+  /* disguise mode: the ghost walks among the survivors as itself, and must shed its skin to hunt */
+  morphTime:1.3, huntTime:22, formCD:16, formFirst:25
 };
 
 /* three ghosts: the stats the host simulates and the client presents */

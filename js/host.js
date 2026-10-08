@@ -3,7 +3,7 @@
 (function(K){
 'use strict';
 const {CFG, GHOSTS, clamp, r2} = K;
-const H = K.H = {phase:'none', lobby:[], pick:null, gtype:{}, dawn:K.store.get('dawn', CFG.dawn), joinN:0,
+const H = K.H = {phase:'none', lobby:[], pick:null, gtype:{}, dawn:K.store.get('dawn', CFG.dawn), mode:K.store.get('mode','normal')==='disguise'?'disguise':'normal', joinN:0,
   players:{}, t:0, wake:0, left:0, gk:'krasue', altars:[], candles:[], offers:[], charms:[], bats:[], holy:[], holds:{}};
 const isSpect = p => p.s==='dead' || p.s==='escaped';
 
@@ -12,8 +12,10 @@ function order(){
   return H.lobby.slice().sort((a,b)=> (a.i===H.pick?-1:0)-(b.i===H.pick?-1:0) || a.gc-b.gc || a.j-b.j);
 }
 K.nextGhost = () => { const o = order(); return o.length ? o[0].i : null; };
+/* in disguise mode nobody (the host included) is told who the next ghost is: it is drawn at the start */
+const hidden = () => H.mode==='disguise';
 function lobbyMsg(){
-  return {t:'lobby', code:K.NET.code, host:K.NET.me, ghost:K.nextGhost(), picked:!!H.pick, queue:order().map(q=>q.i), dawn:H.dawn,
+  return {t:'lobby', code:K.NET.code, host:K.NET.me, ghost:hidden()?null:K.nextGhost(), picked:!hidden() && !!H.pick, queue:hidden()?[]:order().map(q=>q.i), dawn:H.dawn, mode:H.mode,
     p:H.lobby.map(q=>({i:q.i, n:q.n, look:q.look, gc:q.gc}))};
 }
 K.broadcastLobby = function(){
@@ -26,7 +28,8 @@ K.hostOpen = function(id, name){
   H.pick = null; H.phase = 'lobby';
   K.broadcastLobby();
 };
-K.hostSetGhost = function(id){ if(!K.NET.isHost || H.phase!=='lobby') return; H.pick = H.pick===id ? null : id; K.broadcastLobby(); };
+K.hostSetGhost = function(id){ if(!K.NET.isHost || H.phase!=='lobby' || hidden()) return; H.pick = H.pick===id ? null : id; K.broadcastLobby(); };
+K.hostSetMode = function(mode){ if(!K.NET.isHost || H.phase!=='lobby') return; H.mode = mode==='disguise' ? 'disguise' : 'normal'; H.pick = null; K.store.set('mode', H.mode); K.broadcastLobby(); };
 K.hostSetDawn = function(sec){ if(!K.NET.isHost) return; H.dawn = sec; K.store.set('dawn', sec); if(H.phase==='lobby') K.broadcastLobby(); };
 K.hostDrop = function(id){
   if(!K.NET.isHost) return;
@@ -126,6 +129,7 @@ K.hostRecv = function(id, m){
           const gy = Math.min(gh.y, 2.2);
           if(along>-.3 && along<CFG.saltRange && perp<1.1 && K.lineOfSight(p.x,1.4,p.z,gh.x,gy,gh.z)){
             hit = true; p.stat.stun++; gh.stat.stun++;
+            if(gh.dis){ unmask(gh, true); K.broadcast({t:'e', k:'morph', who:gh.i, forced:1, by:id}); }   // salt burns the disguise off
             gh.stunUntil = Math.max(gh.stunUntil, H.t+GHOSTS[gh.gk].saltStun);
             gh.lungeUntil = 0; gh.invUntil = 0; gh.atkReady = Math.max(gh.atkReady, gh.stunUntil);
           }
@@ -140,10 +144,15 @@ K.hostRecv = function(id, m){
       return;
     }
     case 'atk':
-      if(!p || p.role!=='ghost' || !play || H.t<p.stunUntil || H.t<p.atkReady) return;
+      if(!p || p.role!=='ghost' || !play || H.t<p.stunUntil) return;
+      if(p.dis){   // disguised: the attack button sheds the disguise
+        if(p.morphUntil || H.t<p.formReady) return;
+        p.morphUntil = H.t+CFG.morphTime; K.broadcast({t:'e', k:'morph', who:id}); return;
+      }
+      if(H.t<p.atkReady) return;
       p.lungeUntil = H.t+CFG.lungeTime; p.lungeHit=false; p.atkReady = H.t+99; p.invUntil = 0; return;
     case 'skill': {
-      if(!p || p.role!=='ghost' || !play || H.t<p.skillReady || H.t<p.stunUntil) return;
+      if(!p || p.role!=='ghost' || !play || p.dis || H.t<p.skillReady || H.t<p.stunUntil) return;
       const g = GHOSTS[p.gk];
       p.skillUntil = H.t+g.skillTime; p.skillReady = H.t+g.skillTime+g.skillCD;
       if(g.skill==='inv'){ p.invUntil = p.skillUntil; K.broadcast({t:'e', k:'inv', who:id}); }
@@ -159,7 +168,7 @@ K.hostRecv = function(id, m){
       if(!p || p.role!=='surv' || p.s!=='alive' || !H.gate || p.z<25.5) return;
       p.s='escaped'; K.broadcast({t:'e', k:'esc', who:id}); return;
     case 'ping':
-      if(!p || p.role!=='surv' || isSpect(p) || H.t<p.pingReady || ![0,1,2].includes(m.k)) return;
+      if(!p || !(p.role==='surv' || p.dis) || isSpect(p) || H.t<p.pingReady || ![0,1,2].includes(m.k)) return;   // a disguised ghost can cry wolf
       p.pingReady = H.t+CFG.signalCD;
       sendSurv({t:'e', k:'ping', who:id, s:m.k, x:r2(p.x), z:r2(p.z)}); return;
     case 'wisp':
@@ -179,7 +188,9 @@ function spread(pool, n, minD){
 K.hostStart = function(){
   if(!K.NET.isHost || H.phase!=='lobby') return;
   if(H.lobby.length<2 && !K.DEBUG) return;
-  const ghost = K.nextGhost();
+  const dis = H.mode==='disguise';
+  let ghost = K.nextGhost();
+  if(dis){ const low = Math.min(...H.lobby.map(q=>q.gc)); ghost = K.pick(H.lobby.filter(q=>q.gc===low)).i; }
   const gk = GHOSTS[H.gtype[ghost]] ? H.gtype[ghost] : 'krasue';
   const gq = H.lobby.find(q=>q.i===ghost); if(gq) gq.gc++;
   H.pick = null;
@@ -192,18 +203,20 @@ K.hostStart = function(){
   const kinds = K.shuffle(['takrut','salt','holy','takrut','salt','holy']);
   H.charms = spread(K.CHARM_SPOTS, CFG.charms, 7).map((s,i)=>({k:kinds[i%kinds.length], x:K.CHARM_SPOTS[s][0], z:K.CHARM_SPOTS[s][1], up:true}));
   H.bats = K.BAT_SPOTS.map(()=>0);
-  let k = 0; const nSurv = H.lobby.filter(q=>q.i!==ghost).length;
+  // in disguise mode the ghost lines up at the gate with everyone else, in a random place in the row
+  let k = 0; const row = K.shuffle(H.lobby.filter(q=>dis || q.i!==ghost).map(q=>q.i)), nRow = row.length;
   const list = H.lobby.map(q=>{
-    const role = q.i===ghost ? 'ghost' : 'surv';
-    const x = role==='ghost' ? 0 : (k - (nSurv-1)/2)*1.3; if(role==='surv') k++;
-    const z = role==='ghost' ? -3.6 : 21.2, a = role==='ghost' ? Math.PI : 0;
-    H.players[q.i] = {i:q.i, n:q.n, role, gk:role==='ghost'?gk:null, mob:q.mob, x, y:role==='ghost'?GHOSTS[gk].eye:0, z, a, b:0, f:1,
+    const role = q.i===ghost ? 'ghost' : 'surv', inRow = row.includes(q.i);
+    const x = inRow ? (row.indexOf(q.i) - (nRow-1)/2)*1.3 : 0;
+    const z = inRow ? 21.2 : -3.6, a = inRow ? 0 : Math.PI;
+    H.players[q.i] = {i:q.i, n:q.n, role, gk:role==='ghost'?gk:null, mob:q.mob, x, y:role==='ghost'&&!dis?GHOSTS[gk].eye:0, z, a, b:0, f:1,
+      dis: role==='ghost' && dis, morphUntil:0, formUntil:0, formReady: CFG.wake+CFG.formFirst,
       h:2, s:'alive', bl:0, rv:0, fn:0, ch:null, of:-1, pl:0, slowUntil:0, pingReady:0, wispReady:0,
       stunAcc:0, stunUntil:0, immUntil:0, invUntil:0, skillUntil:0, skillReady:0, atkReady:0, lungeUntil:0, lungeHit:false,
       stat:{c:0, o:0, rv:0, stun:0, hit:0, down:0, kill:0}};   // for the results screen
     return {i:q.i, n:q.n, look:q.look, x, z, a};
   });
-  K.broadcast({t:'start', ghost, gk, dawn:H.dawn, altars:H.altars, offers:H.offers.map(o=>({k:o.k,x:o.x,z:o.z})), charms:H.charms.map(c=>({k:c.k,x:c.x,z:c.z})), p:list});
+  K.broadcast({t:'start', ghost, gk, mode:H.mode, dawn:H.dawn, altars:H.altars, offers:H.offers.map(o=>({k:o.k,x:o.x,z:o.z})), charms:H.charms.map(c=>({k:c.k,x:c.x,z:c.z})), p:list});
 };
 
 function hostTick(dt){
@@ -247,7 +260,7 @@ function hostTick(dt){
         if(q.rv>=1){ q.s='alive'; q.h=1; q.rv=0; q.fn=0; p.stat.rv++; K.broadcast({t:'e', k:'revive', who:q.i, by:id}); }
       } else if(h.k==='finish'){
         const q = H.players[h.i];
-        if(!q || p.role!=='ghost' || H.t<p.stunUntil || q.s!=='down' || !near(p,q.x,q.z,CFG.reach+.4)) continue;
+        if(!q || p.role!=='ghost' || p.dis || H.t<p.stunUntil || q.s!=='down' || !near(p,q.x,q.z,CFG.reach+.4)) continue;
         q.fn += dt/CFG.finishTime; q.finishing = H.t;
         if(q.fn>=1){ p.stat.kill++; q.s='dead'; K.broadcast({t:'e', k:'dead', who:q.i, how:'finish'}); }
       }
@@ -260,6 +273,14 @@ function hostTick(dt){
       if(q.bl<=0){ q.s='dead'; K.broadcast({t:'e', k:'dead', who:q.i, how:'bleed'}); }
     }
     for(const q of surv) if(q.of>=0 && q.s!=='alive') dropOffer(q);
+    if(gh && H.mode==='disguise'){
+      if(gh.dis && gh.morphUntil && H.t>=gh.morphUntil) unmask(gh, false);
+      else if(gh.dis && (H.gate && !gh.morphUntil)) { unmask(gh, false); K.broadcast({t:'e', k:'morph', who:gh.i, forced:2}); }
+      else if(!gh.dis && gh.formUntil && H.t>=gh.formUntil && H.t>=gh.lungeUntil && H.t>=gh.stunUntil){
+        gh.dis = true; gh.formUntil = 0; gh.formReady = H.t+CFG.formCD; gh.invUntil = 0; gh.skillUntil = Math.min(gh.skillUntil, H.t);
+        K.broadcast({t:'e', k:'unmorph', who:gh.i});
+      }
+    }
     if(gh){
       const G_ = GHOSTS[gh.gk];
       if(gh.lungeUntil && !gh.lungeHit){
@@ -285,7 +306,7 @@ function hostTick(dt){
       }
       gh.sx = gh.x; gh.sz = gh.z;
       // flashlight stun
-      if(H.t>=gh.stunUntil){
+      if(H.t>=gh.stunUntil && !gh.dis){
         let lit = false;
         const gy = gh.y - (gh.gk==='krasue' ? .1 : .3);
         for(const q of surv){
@@ -323,6 +344,8 @@ function snapshot(){
   for(const id in H.players){
     const q = H.players[id];
     let f = q.f & 0x247;   // 1 light, 2 run, 4 move, 64 holding, 512 crouched
+    if(q.dis) f|=1024;     // disguised as a person
+    if(q.morphUntil) f|=2048;
     if(H.t<q.invUntil) f|=8;
     if(H.t<q.stunUntil) f|=16;
     if(H.t<q.lungeUntil) f|=32;
@@ -331,12 +354,19 @@ function snapshot(){
     const o = {i:q.i, x:r2(q.x), y:r2(q.y), z:r2(q.z), a:r2(q.a), b:r2(q.b), f, h:q.h, s:q.s};
     if(q.role==='surv'){ o.ch = q.ch||''; o.of = q.of; if(q.pl>0) o.pl = r2(q.pl); }
     if(q.s==='down'){ o.bl=Math.ceil(q.bl); o.rv=r2(q.rv); o.fn=r2(q.fn); }
+    if(q.role==='ghost' && H.mode==='disguise'){ o.fr=r2(Math.max(0,q.formReady-H.t)); o.fu=q.formUntil?r2(Math.max(0,q.formUntil-H.t)):0; }
     if(q.role==='ghost'){ o.cd=r2(Math.max(0,q.atkReady-H.t)); o.sq=r2(Math.max(0,q.skillReady-H.t)); o.sa=r2(Math.min(1,q.stunAcc/GHOSTS[q.gk].stunNeed)); }
     p.push(o);
   }
   return {t:'s', ph:H.phase, wk:Math.ceil(H.wake), lf:Math.ceil(H.left), c:H.candles.map(r2), g:H.gate?1:0, b:H.bats.map(v=>v>0?0:1),
     o:H.offers.map(o=>[r2(o.x), r2(o.z), o.by||'', o.placed?1:0]),
     ch:H.charms.map(c=>[c.x, c.z, c.k, c.up?1:0]), p};
+}
+/* the disguise comes off: after the morph, or burnt off by salt (then it stands there stunned, plainly a ghost) */
+function unmask(gh, salt){
+  gh.dis = false; gh.morphUntil = 0;
+  gh.formUntil = H.gate ? 0 : H.t + CFG.huntTime + (salt ? GHOSTS[gh.gk].saltStun : 0);
+  gh.atkReady = Math.max(gh.atkReady, H.t+.4); gh.stunAcc = 0;
 }
 function hostEnd(why){
   H.phase = 'end'; H.holds = {};

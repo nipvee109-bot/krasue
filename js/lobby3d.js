@@ -115,8 +115,8 @@ K.lobby3d = {
       o.tx = pos[i][0]; o.tz = pos[i][1];
       o.host = p.i===m.host;
     });
-    const gid = K.lobbyGhostShown ? K.lobbyGhostShown(m) : m.ghost;
-    shade.id = gid && PEOPLE[gid] ? gid : null;
+    shade.id = m.ghost && PEOPLE[m.ghost] ? m.ghost : null;
+    shade.roam = m.mode==='disguise' && ids.length>1;   // nobody knows who: the shadow drifts from one to the next
   },
   active(){ return !G.inGame && !K.$('#lobbyCard').hidden; },
   clear(){ for(const id of Object.keys(PEOPLE)){ const o = PEOPLE[id]; K.disposeTree(o.v.g); K.disposeTree(o.label); delete PEOPLE[id]; } lobbyRef = null; },
@@ -149,6 +149,10 @@ K.lobby3d = {
       o.label.position.set(o.x, 2.3+Math.sin(t*1.2+o.ph)*.02, o.z);
     }
     // the shadow behind the next ghost leans in and out of the light
+    if(shade.roam){
+      shade.rt = (shade.rt||0) - dt;
+      if(shade.rt<=0){ const ids = Object.keys(PEOPLE).filter(i=>i!==shade.id); shade.id = ids[Math.random()*ids.length|0]; shade.rt = mr(4,8); shade.k = 0; }
+    }
     if(shade.id && PEOPLE[shade.id]){
       const o = PEOPLE[shade.id];
       shade.g.visible = true; shade.k = Math.min(1, shade.k+dt*.5);

@@ -140,6 +140,9 @@ body.sig-open .sigs{display:flex}
 .tb.r-surv,.tb.r-ghost,.tb.r-spect{display:none}
 body.role-surv .tb.r-surv,body.role-ghost .tb.r-ghost,body.role-spect .tb.r-spect{display:grid}
 body.role-spect .tb.r-surv:not(.r-spect){display:none}
+/* a disguised ghost has the survivor's torch, crouch and use buttons too, and no skill or feeding yet */
+body.role-ghost.disg .tb[data-act=light],body.role-ghost.disg .tb[data-act=crouch],body.role-ghost.disg .tb[data-act=use],body.role-ghost.disg .tb[data-act=sig]{display:grid}
+body.role-ghost.disg .tb[data-act=skill],body.role-ghost.disg .tb[data-act=hold]{display:none}
 #tMic.off{border-color:var(--blood);color:var(--blood)}
 body.touch #team{font-size:12px;max-width:28vw}
 body.touch #goal{top:calc(14px + var(--st));font-size:12px;max-width:30vw}
@@ -165,3 +168,5 @@ body.lobby3d #lobbyCard .keys{grid-template-columns:1fr 1fr;font-size:12px;gap:6
   body.lobby3d #lobbyCard{place-items:end center;padding:46vh 16px 24px;background:linear-gradient(to top, rgba(5,6,10,.94) 0, rgba(5,6,10,.9) 52%, rgba(5,6,10,0) 64%)}
   body.lobby3d #lobbyCard .card-in{max-width:560px}
 }
+body.touch .fsBtn{display:inline-block}
+.fsBtn[hidden]{display:none!important}

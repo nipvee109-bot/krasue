@@ -107,7 +107,7 @@ function voiceGain(me, s){
   if(!K.G.inGame || K.G.ph==='end') return [1,0];
   if(!me || !s) return [0,0];
   const spect = v => v.s==='dead' || v.s==='escaped';
-  if(s.role==='ghost') return [0,0];
+  if(s.role==='ghost') return K.masked(s) ? [0,1] : [0,0];   // in disguise it talks like anyone else
   if(spect(s)) return spect(me) ? [1,0] : [0,0];
   if(spect(me)) return [0,0];
   return [0,1];
@@ -123,7 +123,7 @@ V.update = function(dt){
     const [d, sp] = voiceGain(me, s);
     e.gD.gain.setTargetAtTime(d, t, .08);
     e.gS.gain.setTargetAtTime(sp, t, .08);
-    if(s && sp>0) K.setPos(e.pan, s.pos.x, s.role==='ghost'?s.pos.y:1.6, s.pos.z);
+    if(s && sp>0) K.setPos(e.pan, s.pos.x, s.role==='ghost'&&!K.masked(s)?s.pos.y:1.6, s.pos.z);
   }
 };
 })(window.K);

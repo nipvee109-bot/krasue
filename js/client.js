@@ -10,6 +10,9 @@ K.gameTime = 0;
 K.LOBBY = null;
 const isSpect = v => v && (v.s==='dead' || v.s==='escaped');
 K.isSpect = isSpect;
+/* disguise mode: the ghost passes as a person (and is not mid-transformation) */
+const masked = v => !!v && v.role==='ghost' && (v.flags&1024) && !(v.flags&2048);
+K.masked = masked;
 K.voiceIds = () => G.inGame ? Object.keys(P) : (K.LOBBY ? K.LOBBY.p.map(p=>p.i) : []);
 
 K.clientRecv = function(m){
@@ -62,7 +65,19 @@ function addPlayerView(pl, role){
     stepD:0, last:new V3(pl.x,0,pl.z), spot:null, voiceT:mr(6,12), seenAt:-99};
   P[pl.i] = v;
   if(pl.i===K.NET.me) return v;
-  if(ghost){ v.model = K.ghostModel(G.gk); }
+  if(ghost){
+    v.model = K.ghostModel(G.gk);
+    if(G.mode==='disguise'){   // the face it wears among the others
+      v.flags = 1024|1;
+      v.dmodel = K.personModel(look); scene.add(v.dmodel.g);
+      v.label = K.labelSprite(pl.n, look.c); v.label.position.y = 2.15; v.dmodel.g.add(v.label);
+      v.spot = K.SPOTS.find(s=>!s.used); if(v.spot) v.spot.used = true;
+      // eyes that only the lightning shows
+      const em = new THREE.MeshBasicMaterial({color:0xff2a1a, transparent:true, opacity:0, fog:false, depthWrite:false});
+      v.deyes = [-1,1].map(s=>{ const e = new THREE.Mesh(new THREE.SphereGeometry(.03,6,4), em); e.position.set(s*.065,1.7,-.135); v.dmodel.g.add(e); return e; });
+      v.deyeMat = em;
+    }
+  }
   else {
     v.model = K.personModel(look);
     v.label = K.labelSprite(pl.n, look.c); v.label.position.y = 2.15; v.model.g.add(v.label);
@@ -76,6 +91,7 @@ function removePlayerView(id){
   const v = P[id]; if(!v) return;
   if(v.model){ if(v.model.carry) for(const c of v.model.carry.children.slice()) v.model.carry.remove(c); K.disposeTree(v.model.g); }   // an offering they carried is not theirs to free
   if(v.spirit) K.disposeTree(v.spirit.g);
+  if(v.dmodel) K.disposeTree(v.dmodel.g);
   if(v.spot){ v.spot.used=false; v.spot.light.intensity=0; v.spot.beam.visible=false; }
   delete P[id];
 }
@@ -84,12 +100,14 @@ K.nameOf = id => P[id] ? (id===K.NET.me ? 'คุณ' : P[id].name) : 'ใคร
 
 function onStart(m){
   K.exitGame();
-  G.inGame = true; G.ph = 'wake'; G.gate = false; G.ended = false; G.wake = CFG.wake; G.gk = m.gk; G.dawn = m.dawn; G.left = m.dawn; G.known = false;
+  G.inGame = true; G.mode = m.mode==='disguise' ? 'disguise' : 'normal'; G.disg = G.mode==='disguise'; G.ph = 'wake'; G.gate = false; G.ended = false; G.wake = CFG.wake; G.gk = m.gk; G.dawn = m.dawn; G.left = m.dawn; G.known = false;
   buildRound(m);
   for(const pl of m.p) addPlayerView(pl, pl.i===m.ghost?'ghost':'surv');
   const me = P[K.NET.me]; if(!me){ K.exitGame(); return; }
   G.role = me.role;
   if(G.role==='ghost') G.known = true;
+  if(G.role!=='ghost') G.disg = false;
+  if(G.disg) L.light = true;
   L.pos.set(me.pos.x, 0, me.pos.z); L.yaw = me.yaw; L.pitch = 0;
   L.battery = 100; L.stamina = 100; L.exhausted = false; L.light = G.role==='surv'; L.escSent = false; L.lungeUntil = 0; L.boostUntil = 0;
   L.sc = null; L.ch = ''; L.of = -1; L.flyY = 3; L.autoHold = null; L.crouch = false; L.eyeH = CFG.eye;
@@ -99,7 +117,16 @@ function onStart(m){
   K.$('#hudWrap').hidden = false;
   K.setRoleClass();
   const gname = m.ghost && P[m.ghost] ? P[m.ghost].name : '';
-  if(G.role==='ghost'){
+  if(G.mode==='disguise' && G.role==='ghost'){
+    const g = GHOSTS[G.gk];
+    K.$('#roleSub').textContent = 'โหมดปลอมตัว · คืนนี้คุณคือ'+g.name+' ที่ปลอมตัวเป็นคน';
+    K.$('#roleTitle').textContent = 'ผีปลอมตัว';
+    K.$('#roleText').textContent = `ไม่มีใครรู้ว่าคุณคือผี เดิน คุย ส่องไฟฉายไปกับเพื่อนได้ตามปกติ พอได้จังหวะ${K.IS_TOUCH?'กดปุ่มกลายร่าง':'คลิก'}เพื่อกลายร่าง (มีเสียงกรีดร้อง ใครอยู่ใกล้จะเห็น) แล้วตามล่า ${CFG.huntTime} วิ ก่อนจะกลับมาปลอมตัวใหม่ · ระวังเกลือ: โดนปาตอนปลอมตัวจะถูกเผยร่าง เส้นน้ำมนต์ก็เดินผ่านไม่ได้ อีกาจะบินหนีคุณ และฟ้าแลบจะเห็นตาแดงของคุณ`;
+  } else if(G.mode==='disguise'){
+    K.$('#roleSub').textContent = 'โหมดปลอมตัว · คุณคือคนหนี';
+    K.$('#roleTitle').textContent = 'ใครคือผี?';
+    K.$('#roleText').textContent = `ผีปลอมตัวเป็นหนึ่งในเพื่อนที่ยืนอยู่ข้างคุณ ทำภารกิจเหมือนเดิม: จุดเทียน ${CFG.candles} เล่ม วางของไหว้ ${CFG.offerings} ชิ้นที่ศาล แล้วหนีออกประตูทิศใต้ · สังเกตให้ดี: ใครจุดเทียนแล้วเทียนไม่ขึ้น ใครเดินข้ามเส้นน้ำมนต์ไม่ได้ ตอนฟ้าแลบตาใครเป็นสีแดง อีกาบินหนีใคร ตะกรุดจะสั่นเมื่อผีอยู่ใกล้ ปาเกลือใส่คนที่สงสัยจะบังคับให้มันเผยร่าง`;
+  } else if(G.role==='ghost'){
     const g = GHOSTS[G.gk];
     K.$('#roleSub').textContent = 'คืนนี้คุณคือ';
     K.$('#roleTitle').textContent = g.name;
@@ -114,7 +141,7 @@ function onStart(m){
 }
 K.exitGame = function(){
   for(const id of Object.keys(P)) removePlayerView(id);
-  G.inGame=false; G.role=null; G.ph='none'; L.sc=null;
+  G.inGame=false; G.role=null; G.ph='none'; G.disg=false; G.mode='normal'; L.sc=null;
   document.body.classList.remove('ghost');
   K.$('#hudWrap').hidden = true; K.$('#hurt').style.opacity=0; K.$('#flash').style.opacity=0;
   K.SPOTS[0].light.intensity=0; K.SPOTS[0].beam.visible=false; K.handTorch.visible=false;
@@ -126,7 +153,7 @@ K.exitGame = function(){
 };
 K.setVision = function(){
   const role = G.inGame ? G.role : null;
-  if(role==='ghost'){
+  if(role==='ghost' && !G.disg){
     const pret = G.gk==='pret';
     K.amb.color.set(0x6a3a3a); K.amb.intensity=1.25; scene.fog.color.set(0x140404); scene.fog.density = pret ? .034 : .045; scene.background.set(0x140404); K.moonLight.intensity=.5;
   } else { K.amb.color.set(0x1b2436); K.amb.intensity=.55; scene.fog.color.set(0x04060a); scene.fog.density=.075*K.QUAL[K.QUALITY].fog; scene.background.set(0x04060a); K.moonLight.intensity=.38; }
@@ -160,10 +187,11 @@ function onSnap(m){
     const prev = v.s;
     v.h=o.h; v.s=o.s; v.flags=o.f; v.bl=o.bl||0; v.rv=o.rv||0; v.fn=o.fn||0; v.pl=o.pl||0;
     if(v.role==='surv'){ v.ch=o.ch||''; v.of=o.of==null?-1:o.of; }
-    if(v.role==='ghost'){ v.cd=o.cd; v.sq=o.sq; v.sa=o.sa; }
+    if(v.role==='ghost'){ v.cd=o.cd; v.sq=o.sq; v.sa=o.sa; v.fr=o.fr||0; v.fu=o.fu||0; }
     if(o.i!==K.NET.me){ v.tpos.set(o.x,o.y,o.z); v.tyaw=o.a; v.tpitch=o.b; }
     else {
       if(prev!==v.s) onMyState(prev, v.s);
+      if(G.role==='ghost' && G.mode==='disguise'){ const d = !!(v.flags&1024) && !(v.flags&2048); if(d!==G.disg){ G.disg = d; if(d) L.light = false; K.setVision(); K.setRoleClass(); } }
       if(v.ch!==L.ch || v.of!==L.of){ L.ch = v.ch; L.of = v.of; refreshHand(); }
     }
   }
@@ -283,9 +311,14 @@ K.updateTrails = function(dt){
 /* survivors find out which ghost it is once they get a good look at it */
 let revealT = 0;
 K.checkReveal = function(dt){
+  // disguise mode: a takrut trembles when the ghost stands close, whoever it is pretending to be
+  if(G.mode==='disguise' && G.role==='surv' && L.ch==='takrut' && G.ph==='play' && K.gameTime>(L.takrutT||0)){
+    const g = K.ghostView(), me = P[K.NET.me];
+    if(g && masked(g) && me && me.s==='alive' && Math.hypot(g.pos.x-L.pos.x, g.pos.z-L.pos.z)<4){ L.takrutT = K.gameTime+7; K.toast('ตะกรุดในมือสั่น... ผีอยู่ใกล้ตัวคุณ', 3); K.sfx.block(); K.vibrate && K.vibrate(90); }
+  }
   if(G.role!=='surv' || G.known) return;
   revealT -= dt; if(revealT>0) return; revealT = .25;
-  const g = K.ghostView(); if(!g || (g.flags&8) || G.ph!=='play') return;
+  const g = K.ghostView(); if(!g || (g.flags&8) || masked(g) || G.ph!=='play') return;
   const cam = K.camera.position, d = cam.distanceTo(g.pos);
   const close = G.gk==='krasue' ? 18 : 11;
   if(d>close) return;
@@ -304,8 +337,27 @@ function onEvent(m){
   const me = P[K.NET.me], ghost = G.role==='ghost', sfx = K.sfx, at = K.at;
   switch(m.k){
     case 'wake':
+      if(G.mode==='disguise'){ K.toast(ghost ? `ออกหากินได้แล้ว · กลายร่างได้ในอีก ${CFG.formFirst} วิ` : 'ผีตื่นแล้ว... มันอยู่ในกลุ่มพวกคุณ'); if(!ghost) K.sfx.haunt(K.spatial(L.pos.x+mr(-6,6), 2, L.pos.z+mr(-6,6), K.A.amb)); break; }
       if(ghost) K.toast('ออกหากินได้แล้ว'); else { K.toast('ผีตื่นแล้ว...'); const g=K.ghostView(); if(g) ghostVoice(g); }
       break;
+    case 'morph': {
+      const g = P[m.who]; if(!g) break;
+      g.morphT = m.forced ? CFG.morphTime*.6 : 0; g.morphing = true;
+      if(ghost){ K.toast(m.forced===1 ? 'เกลือเผาร่างปลอมจนหลุด! ทุกคนเห็นคุณแล้ว' : m.forced===2 ? 'ประตูวัดเปิด! ร่างปลอมหลุด คุณคลั่งแล้ว' : 'กำลังกลายร่าง...', 4); K.shake = .5; sfx.growl(); break; }
+      const seen = g.pos.distanceTo(K.camera.position)<16 && K.lineOfSight(K.camera.position.x,K.camera.position.y,K.camera.position.z,g.pos.x,1.4,g.pos.z);
+      sfx.shriek(at({x:g.pos.x,y:1.6,z:g.pos.z}));
+      if(seen){ K.toast(`${g.name} คือ${GHOSTS[G.gk].name}!! มันกำลังกลายร่าง`, 4.5); sfx.scare(); K.shake = .4; G.known = true; }
+      else K.toast('ได้ยินเสียงกรีดร้อง... ผีถอดร่างปลอมแล้ว', 3.5);
+      break;
+    }
+    case 'unmorph': {
+      const g = P[m.who]; if(!g) break;
+      g.morphing = false;
+      if(ghost){ K.toast('กลับมาปลอมตัวแล้ว · ทำตัวให้เนียน', 3.5); sfx.whoosh(); break; }
+      const seen = g.pos.distanceTo(K.camera.position)<14 && K.lineOfSight(K.camera.position.x,K.camera.position.y,K.camera.position.z,g.pos.x,1.4,g.pos.z);
+      if(seen) K.toast(`ผีกลับไปอยู่ในร่างของ ${g.name}`, 4);
+      break;
+    }
     case 'lit': {
       sfx.bell(); K.toast(`จุดเทียนแล้ว ${m.n}/${CFG.candles} เล่ม`);
       const c = R.cand[m.i];   // the ghost feels each candle catch, and where
@@ -353,7 +405,7 @@ function onEvent(m){
     case 'offer': if(m.who===K.NET.me){ sfx.pick(); K.toast('ถือ'+K.OFFERS[R.offers[m.i].k]+'แล้ว ไปวางที่ศาลพระภูมิ (ถือแล้ววิ่งไม่ได้)', 4); } break;
     case 'salt':
       saltFx(m.x,m.z,m.a); sfx.salt(at({x:m.x,y:1.3,z:m.z}));
-      if(m.hit){ if(ghost){ sfx.stun(); K.toast('เกลือ! แสบไปทั้งตัว'); } else { const g=K.ghostView(); if(g) sfx.shriek(at(g.pos)); if(m.who===K.NET.me) K.toast('ปาโดน! ผีชะงัก'); } }
+      if(m.hit){ if(ghost){ sfx.stun(); if(G.mode!=='disguise') K.toast('เกลือ! แสบไปทั้งตัว'); } else { const g=K.ghostView(); if(g) sfx.shriek(at(g.pos)); if(m.who===K.NET.me) K.toast(g && g.morphing && G.mode==='disguise' ? `โดนเต็มๆ! ร่างปลอมหลุด ${g.name} คือผี!` : 'ปาโดน! ผีชะงัก', 4); } }
       else if(m.who===K.NET.me) K.toast('ปาเกลือพลาด');
       break;
     case 'holy':

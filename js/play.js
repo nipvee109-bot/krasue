@@ -24,6 +24,8 @@ K.findTarget = function(){
     if(L.of<0) for(const o of R.offers) if(!o.placed && !o.by) consider(o.x,o.z,{k:'offer',i:o.i},1.7);
     if(L.of>=0) consider(K.SHRINE.x,K.SHRINE.z,{k:'place'},2.4);
     for(const v of Object.values(P)) if(v.id!==K.NET.me && v.role==='surv' && v.s==='down') consider(v.pos.x,v.pos.z,{k:'revive',i:v.id},1.9);
+  } else if(me.role==='ghost' && G.disg){
+    for(const c of R.cand) if(!c.lit) consider(c.x,c.z,{k:'candle',i:c.i},1.9);   // pretend to help: the flame never grows
   } else if(me.role==='ghost' && !(me.flags&16)){
     for(const v of Object.values(P)) if(v.role==='surv' && v.s==='down') consider(v.pos.x,v.pos.z,{k:'finish',i:v.id},2.2);
   }
@@ -52,27 +54,34 @@ K.useCharm = function(){
   K.sendHost({t:'use'});
 };
 K.signal = function(k){
-  const me = P[K.NET.me]; if(!G.inGame || !me || me.role!=='surv' || K.isSpect(me)) return;
+  const me = P[K.NET.me]; if(!G.inGame || !me || !(me.role==='surv' || G.disg) || K.isSpect(me)) return;
   if(K.gameTime<(L.pingLocal||0)) return;
   L.pingLocal = K.gameTime + CFG.signalCD;
   K.sendHost({t:'ping', k});
 };
 K.toggleCrouch = function(){
   const me = P[K.NET.me];
-  if(G.role==='surv' && me && me.s==='alive' && !L.menu) L.crouch = !L.crouch;
+  if((G.role==='surv' || G.disg) && me && me.s==='alive' && !L.menu) L.crouch = !L.crouch;
 };
 K.toggleLight = function(){
   const me = P[K.NET.me];
-  if(G.role==='surv' && me && me.s==='alive' && L.battery>0){ L.light=!L.light; K.sfx.pick(); }
+  if((G.role==='surv' || G.disg) && me && me.s==='alive' && L.battery>0){ L.light=!L.light; K.sfx.pick(); }
 };
 K.ghostAttack = function(){
   const me = P[K.NET.me];
+  if(G.role==='ghost' && G.disg && me){
+    if(G.ph!=='play' || (me.flags&2048)) return;
+    if(me.fr>0){ K.toast(`ยังกลายร่างไม่ได้ อีก ${Math.ceil(me.fr)} วิ`, 1.5); return; }
+    if(G.gk==='pret' && K.indoors(L.pos.x, L.pos.z)){ K.toast('เปรตตัวสูงเกิน ออกไปข้างนอกก่อนค่อยกลายร่าง', 2); return; }
+    K.sendHost({t:'atk'}); return;
+  }
   if(G.role!=='ghost' || G.ph!=='play' || !me || (me.flags&16) || me.cd>0 || K.gameTime<L.atkLocal) return;
   L.lungeUntil = K.gameTime+CFG.lungeTime; L.lungeYaw = L.yaw; L.atkLocal = K.gameTime+.8;
   K.sfx.whoosh(); K.sendHost({t:'atk'});
 };
 K.ghostSkill = function(){
   const me = P[K.NET.me];
+  if(G.disg){ K.toast('ต้องกลายร่างก่อนถึงจะใช้สกิลได้', 1.5); return; }
   if(G.role!=='ghost' || G.ph!=='play' || !me || me.sq>0) return;
   K.sendHost({t:'skill'});
 };
@@ -115,7 +124,7 @@ function updateSkillCheck(){
 /* ---------- my movement ---------- */
 K.updateLocal = function(dt){
   const me = P[K.NET.me]; if(!me) return;
-  const ghost = G.role==='ghost', spect = K.isSpect(me), down = me.s==='down';
+  const ghost = G.role==='ghost' && !G.disg, spect = K.isSpect(me), down = me.s==='down';   // a disguised ghost moves like a person
   const gdef = GHOSTS[G.gk];
   if(!L.menu){
     const tr = (keys.ArrowLeft?1:0)-(keys.ArrowRight?1:0); L.yaw += tr*dt*2.2;
@@ -140,10 +149,10 @@ K.updateLocal = function(dt){
     speed = 6;
     if(!L.menu){ if(keys.Space || K.IN.fly>0) L.flyY+=dt*4; if(((keys.ShiftLeft||keys.ShiftRight) && !K.IN.run) || K.IN.fly<0) L.flyY-=dt*4; }
     L.flyY = clamp(L.flyY,.5,12);
-  } else if(down || L.holding){ speed = 0; }
+  } else if(down || L.holding || (me.flags&2048)){ speed = 0; }
   else if(ghost){
     const stunned = me.flags&16;
-    if(G.ph==='wake' || stunned) speed = 0;
+    if(G.ph==='wake' || stunned || (me.flags&2048)) speed = 0;
     else if(K.gameTime<L.lungeUntil){ vx=-Math.sin(L.lungeYaw); vz=-Math.cos(L.lungeYaw); speed=CFG.lunge; il=1; }
     else speed = gdef.speed * ((me.flags&8)?1.1:1) * (me.cd>CFG.missCD+.05 ? .55 : 1) * (G.gate ? CFG.rage : 1);   // enraged once the gate opens
   } else {
@@ -159,7 +168,7 @@ K.updateLocal = function(dt){
     if(L.light){ L.battery = Math.max(0, L.battery-CFG.batDrain*dt); if(L.battery<=0) L.light=false; }
   }
   const dist = speed*dt*Math.max(il, ghost&&K.gameTime<L.lungeUntil?1:0), steps = Math.max(1, Math.ceil(dist/.15));
-  const who = {ghost, fly:ghost && gdef.fly, pret:ghost && G.gk==='pret'};
+  const who = {ghost:G.role==='ghost', fly:ghost && gdef.fly, pret:ghost && G.gk==='pret'};   // holy water stops it even in disguise
   const rad = ghost ? (G.gk==='pop' ? .4 : G.gk==='pret' ? .34 : .3) : CFG.R;
   for(let i=0;i<steps;i++){
     L.pos.x += vx*dist/steps; L.pos.z += vz*dist/steps;
@@ -207,9 +216,37 @@ K.sendState = function(dt){
 
 /* ---------- other players ---------- */
 const tmpV = new V3();
+/* a person walking, crouching, lying down, shining a torch (survivors, and the ghost wearing one of their faces) */
+function animPerson(v, m, dt, sp, moved, gone, iAmGhost){
+  const g = m.g, t = K.gameTime, crouched = (v.flags&512) && v.s==='alive';
+  g.scale.y = lerp(g.scale.y, crouched ? .66 : 1, Math.min(1, dt*9));
+  if(v.s==='down'){ g.position.set(v.pos.x,.15,v.pos.z); g.rotation.set(-Math.PI/2,v.yaw,0,'YXZ'); }
+  else { g.position.set(v.pos.x,0,v.pos.z); g.rotation.set(0,v.yaw,0); }
+  const ph = t*(sp>4?11:7.5);
+  const sw = sp>.3 && v.s==='alive' ? Math.sin(ph)*.6 : 0;
+  m.legs[0].rotation.x = sw; m.legs[1].rotation.x = -sw;
+  m.arms[0].rotation.x = v.of>=0 ? -1.1 : -sw*.7;
+  m.arms[1].rotation.x = Math.PI/2*.85 + v.pitch;
+  v.label.visible = !iAmGhost && !gone && K.camera.position.distanceTo(v.pos)<12;
+  if(v.s==='alive' && moved>0 && !crouched){   // crouch-walking makes no sound
+    v.stepD += moved; if(v.stepD>(sp>4?2.2:1.6)){ v.stepD=0; if(K.A.ctx) K.sfx.step(K.at(v.pos), (sp>4?.3:.18)*(v.h===1?1.4:1)); }
+  }
+  if(v.spot){
+    let on = (v.flags&1) && v.s==='alive';
+    if(on && (v.flags&128) && Math.random()<.35) on = false;
+    v.spot.light.intensity = on ? 2 : 0;
+    v.spot.beam.visible = !!on && K.QUAL[K.QUALITY].beams;
+    if(on){
+      m.torch.getWorldPosition(tmpV);
+      const cb = Math.cos(v.pitch), dir = new V3(-Math.sin(v.yaw)*cb, Math.sin(v.pitch), -Math.cos(v.yaw)*cb);
+      v.spot.light.position.copy(tmpV); v.spot.light.target.position.copy(tmpV).addScaledVector(dir,10);
+      v.spot.beam.position.copy(tmpV); v.spot.beam.lookAt(tmpV.clone().add(dir));
+    }
+  }
+}
 K.updateRemotes = function(dt){
   const k = 1-Math.exp(-dt*14);
-  const iAmGhost = G.role==='ghost', iAmSpect = K.isSpect(P[K.NET.me]);
+  const iAmGhost = G.role==='ghost' && G.mode!=='disguise', iAmSpect = K.isSpect(P[K.NET.me]);
   const t = K.gameTime;
   for(const v of Object.values(P)){
     if(v.id===K.NET.me) continue;
@@ -218,6 +255,7 @@ K.updateRemotes = function(dt){
     const moved = Math.hypot(v.pos.x-v.last.x, v.pos.z-v.last.z); v.last.copy(v.pos);
     const sp = moved/Math.max(dt,1e-4);
     if(v.role==='ghost'){
+      if(v.dmodel && disguised(v, dt, sp, moved, iAmGhost)) continue;
       const inv = v.flags&8, stun = v.flags&16, lunge = v.flags&32, m = v.model;
       g.visible = !inv;
       /* it turns its head to watch you. The เปรต's neck turns further than a neck should */
@@ -259,6 +297,7 @@ K.updateRemotes = function(dt){
       }
       v.voiceT -= dt;
       if(v.voiceT<=0){ v.voiceT = mr(9,16); if(!inv && G.ph==='play' && K.camera.position.distanceTo(v.pos)<20) K.ghostVoice(v); }
+      if(v.dmodel && (v.flags&2048)) morphing(v, t);
     } else {
       const m = v.model;
       g.visible = !gone;
@@ -271,33 +310,44 @@ K.updateRemotes = function(dt){
         if(v.chewT<=0 && gv){ v.chewT = mr(.55,.8); const o = K.at(gv.pos); if(G.gk==='pop') K.sfx.chew(o); else if(G.gk==='krasue') K.sfx.slurp(o); else K.sfx.suck(o); }
       }
       v.lastFn = v.fn;
-      g.scale.y = lerp(g.scale.y, crouched ? .66 : 1, Math.min(1, dt*9));
-      if(v.s==='down'){ g.position.set(v.pos.x,.15,v.pos.z); g.rotation.set(-Math.PI/2,v.yaw,0,'YXZ'); }
-      else { g.position.set(v.pos.x,0,v.pos.z); g.rotation.set(0,v.yaw,0); }
-      const ph = t*(sp>4?11:7.5);
-      const sw = sp>.3 && v.s==='alive' ? Math.sin(ph)*.6 : 0;
-      m.legs[0].rotation.x = sw; m.legs[1].rotation.x = -sw;
-      m.arms[0].rotation.x = v.of>=0 ? -1.1 : -sw*.7;
-      m.arms[1].rotation.x = Math.PI/2*.85 + v.pitch;
-      v.label.visible = !iAmGhost && !gone && K.camera.position.distanceTo(v.pos)<12;
-      if(v.s==='alive' && moved>0 && !crouched){   // crouch-walking makes no sound
-        v.stepD += moved; if(v.stepD>(sp>4?2.2:1.6)){ v.stepD=0; if(K.A.ctx) K.sfx.step(K.at(v.pos), (sp>4?.3:.18)*(v.h===1?1.4:1)); }
-      }
-      if(v.spot){
-        let on = (v.flags&1) && v.s==='alive';
-        if(on && (v.flags&128) && Math.random()<.35) on = false;
-        v.spot.light.intensity = on ? 2 : 0;
-        v.spot.beam.visible = !!on && K.QUAL[K.QUALITY].beams;
-        if(on){
-          m.torch.getWorldPosition(tmpV);
-          const cb = Math.cos(v.pitch), dir = new V3(-Math.sin(v.yaw)*cb, Math.sin(v.pitch), -Math.cos(v.yaw)*cb);
-          v.spot.light.position.copy(tmpV); v.spot.light.target.position.copy(tmpV).addScaledVector(dir,10);
-          v.spot.beam.position.copy(tmpV); v.spot.beam.lookAt(tmpV.clone().add(dir));
-        }
-      }
+      animPerson(v, m, dt, sp, moved, gone, iAmGhost);
     }
   }
 };
+
+/* disguise mode, the ghost as others see it. Returns true while it passes as a person */
+function disguised(v, dt, sp, moved, iAmGhost){
+  const dm = v.dmodel, dis = v.flags&1024, morph = v.flags&2048;
+  if(dis && !morph){
+    v.morphT = 0;
+    v.model.g.visible = false; dm.g.visible = true; dm.g.scale.x = dm.g.scale.z = 1;
+    animPerson(v, dm, dt, sp, moved, false, iAmGhost);
+    // a lightning flash shows what is under the face, for as long as the flash lasts
+    const fl = K.flashOn && K.flashOn();
+    v.deyeMat.opacity = fl ? 1 : Math.max(0, v.deyeMat.opacity - dt*3);
+    return true;
+  }
+  if(morph){ v.morphT = (v.morphT||0) + dt; return false; }
+  // the hunt: the borrowed body is gone
+  dm.g.visible = false; v.deyeMat.opacity = 0; v.model.g.scale.setScalar(1);
+  if(v.spot){ v.spot.light.intensity = 0; v.spot.beam.visible = false; }
+  return false;
+}
+/* shedding the skin: the person shudders and stretches, the ghost grows out of it */
+function morphing(v, t){
+  const dm = v.dmodel, k = clamp(v.morphT/CFG.morphTime, 0, 1);
+  dm.g.visible = k<.9;
+  dm.g.position.set(v.pos.x, 0, v.pos.z);
+  dm.g.rotation.set(Math.sin(t*47)*.12*k, v.yaw + Math.sin(t*31)*.25*k, Math.sin(t*39)*.16*k);
+  dm.g.scale.set(1-k*.35, 1+k*.4, 1-k*.35);
+  dm.arms[0].rotation.x = -2.6*k + Math.sin(t*25)*.3; dm.arms[1].rotation.x = -2.4*k + Math.sin(t*23)*.3;
+  v.deyeMat.opacity = k;
+  v.label.visible = false;
+  if(v.spot){ v.spot.light.intensity = Math.random()<.5 ? 0 : 1.5; v.spot.beam.visible = false; }
+  const gk = clamp((k-.45)/.55, 0, 1);
+  v.model.g.visible = gk>0; v.model.g.scale.setScalar(Math.max(.05, gk));
+  if(k<1) K.lightSource(v.pos.x, 1.2, v.pos.z, 0xff3020, 1.6*k, 6);
+}
 
 /* ---------- world ---------- */
 const DAWN_COL = new THREE.Color(0x2a3550), tmpC = new THREE.Color();
@@ -327,7 +377,7 @@ K.updateWorld = function(dt){
   }
   // my flashlight
   const me = P[K.NET.me], s0 = K.SPOTS[0];
-  const alive = G.inGame && G.role==='surv' && me && me.s==='alive';
+  const alive = G.inGame && (G.role==='surv' || G.disg) && me && me.s==='alive';
   let on = alive && L.light;
   K.handTorch.visible = !!alive;
   K.handItem.visible = !!alive;
@@ -348,10 +398,11 @@ K.updateWorld = function(dt){
 function musicTick(dt, g, me){
   let k = 0, chase = false;
   if(G.inGame && G.ph==='play' && me && !L.menu){
-    if(G.role==='ghost'){
+    if(G.role==='ghost' && G.disg){ /* walking among them: no music to give the game away */ }
+    else if(G.role==='ghost'){
       let d = 1e9; for(const v of Object.values(P)) if(v.role==='surv' && v.s==='alive') d = Math.min(d, Math.hypot(v.pos.x-L.pos.x, v.pos.z-L.pos.z));
       k = clamp(1-d/10, 0, 1)*.85; chase = d<5;
-    } else if(g && (me.s==='alive' || me.s==='down')){
+    } else if(g && !K.masked(g) && (me.s==='alive' || me.s==='down')){
       const d = Math.hypot(g.pos.x-L.pos.x, g.pos.z-L.pos.z);
       k = clamp(1-(d-2)/(CFG.terror-2), 0, 1) * ((g.flags&8) ? .55 : 1);
       chase = d<7 && !(g.flags&8) && !(g.flags&16);
@@ -374,13 +425,13 @@ K.updateAudio = function(dt){
   musicTick(dt, g, me);
   if(!g || !me || G.role==='ghost'){ A.humGain.gain.value = 0; return; }
   K.setPos(A.humPan, g.pos.x, g.pos.y, g.pos.z);
-  A.humGain.gain.value = (g.flags&8) || G.ph==='wake' ? 0 : .22;
+  A.humGain.gain.value = (g.flags&8) || K.masked(g) || G.ph==='wake' ? 0 : .22;
   for(const k in A.hum) A.hum[k].gain.value = k===G.gk ? 1 : 0;
   if(me.s!=='alive' && me.s!=='down') return;
   if(me.s==='down' && me.fn>(L.lastFn||0)+.001){ L.chewT = (L.chewT||0)-dt; if(L.chewT<=0){ L.chewT = mr(.5,.75); const o = K.at(g.pos); if(G.gk==='pop') K.sfx.chew(o); else if(G.gk==='krasue') K.sfx.slurp(o); else K.sfx.suck(o); } }
   L.lastFn = me.fn;
   const d = Math.hypot(g.pos.x-L.pos.x, g.pos.z-L.pos.z);
-  if(d<CFG.terror && G.ph==='play'){
+  if(d<CFG.terror && G.ph==='play' && !K.masked(g)){
     heartT -= dt;
     if(heartT<=0){ const k=1-d/CFG.terror; heartT = lerp(1.15,.42,k); K.sfx.heart(.12+k*.5); }
   }
