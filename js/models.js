@@ -39,12 +39,18 @@ K.personModel = function(look){
 };
 
 /* ---------- ghosts ---------- */
-K.faceTex = K.canvasTex(32,32,(g)=>{
-  g.clearRect(0,0,32,32);
-  g.fillStyle='#b9b39a'; g.beginPath(); g.ellipse(16,15,13,15,0,0,7); g.fill();
-  g.fillStyle='#050505'; g.beginPath(); g.ellipse(10.5,13,4,3,0,0,7); g.ellipse(21.5,13,4,3,0,0,7); g.fill();
-  g.fillStyle='#e04030'; g.fillRect(10,13,2,1); g.fillRect(21,13,2,1);
-  g.fillStyle='#2a0505'; g.beginPath(); g.ellipse(16,23,4,2.2,0,0,7); g.fill();
+K.faceTex = K.canvasTex(64,64,(g)=>{
+  g.clearRect(0,0,64,64);
+  const gr = g.createRadialGradient(32,40,4,32,32,30); gr.addColorStop(0,'#d8d4bc'); gr.addColorStop(.7,'#a7a88f'); gr.addColorStop(1,'#5a5c4c');
+  g.fillStyle = gr; g.beginPath(); g.ellipse(32,31,26,30,0,0,7); g.fill();
+  for(const [x,y] of [[21,27],[43,28]]){
+    const s = g.createRadialGradient(x,y,2,x,y,10); s.addColorStop(0,'rgba(0,0,0,.95)'); s.addColorStop(1,'rgba(0,0,0,0)'); g.fillStyle=s; g.beginPath(); g.ellipse(x,y,10,8,0,0,7); g.fill();
+    g.fillStyle='#d6cfb8'; g.beginPath(); g.ellipse(x,y,5,3,0,0,7); g.fill();
+    g.fillStyle='#c01c10'; g.fillRect(x-1,y-1,2,2);
+  }
+  g.fillStyle='#1a0505'; g.beginPath(); g.moveTo(20,46); g.quadraticCurveTo(32,53,44,46); g.quadraticCurveTo(32,49,20,46); g.fill();   // a thin grin
+  g.fillStyle='#cfc6aa'; for(let x=23;x<42;x+=3) g.fillRect(x,47,2,2);
+  g.fillStyle='#060606'; for(let i=0;i<12;i++){ const x=8+i*4.4; g.fillRect(x|0,0,3,10+Math.random()*14|0); }   // wet fringe
 });
 const auraTex = K.glowTex(140,255,190);
 const redEye = K.share(new THREE.SpriteMaterial({map:K.glowTex(255,60,40), transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, fog:false}));
@@ -58,8 +64,9 @@ K.krasueModel = function(){
   const head = new THREE.Mesh(new THREE.IcosahedronGeometry(.17,1), skin); head.scale.set(1,1.18,1.05); g.add(head);
   const face = new THREE.Mesh(new THREE.PlaneGeometry(.27,.32), new THREE.MeshBasicMaterial({map:K.faceTex,transparent:true,alphaTest:.5}));
   face.position.set(0,0,-.168); face.rotation.y=Math.PI; g.add(face);
-  const hair = new THREE.Mesh(boxGeo(.38,.5,.24), hairM); hair.position.set(0,-.06,.08); g.add(hair);
-  for(let i=0;i<7;i++){ const s=new THREE.Mesh(boxGeo(.05,mr(.5,.9),.05),hairM); const a=mr(-1.6,1.6); s.position.set(Math.sin(a)*.17,-.35,Math.cos(a)*.14+.02); g.add(s); }
+  const hair = new THREE.Mesh(new THREE.IcosahedronGeometry(.2,1), hairM); hair.scale.set(1.08,1.22,1); hair.position.set(0,.03,.05); g.add(hair);
+  // long wet hair hanging down around the dangling organs
+  for(let i=0;i<16;i++){ const l=mr(.5,1.15); const s=new THREE.Mesh(boxGeo(.035,l,.035),hairM); const a=mr(-2.1,2.1); s.position.set(Math.sin(a)*.18,-.05-l/2,Math.cos(a)*.15+.04); s.rotation.set(mr(-.08,.08),0,Math.sin(a)*.1); g.add(s); }
   const guts = new THREE.Group(); guts.position.y=-.2; g.add(guts);
   const organ = new THREE.MeshBasicMaterial({color:0x8a2626});
   const heart = new THREE.Mesh(new THREE.IcosahedronGeometry(.065,0), new THREE.MeshBasicMaterial({color:0x5a0f12})); heart.position.y=-.08; guts.add(heart);

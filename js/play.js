@@ -171,7 +171,18 @@ K.updateLocal = function(dt){
   // camera
   let eye;
   if(spect) eye = L.flyY;
-  else if(down) eye = .35;
+  else if(down){
+    eye = .35;
+    // being fed on: you can't look away from it
+    const gv = K.ghostView();
+    if(me.fn>.03 && gv){
+      const dx = gv.pos.x-L.pos.x, dz = gv.pos.z-L.pos.z, dy = gv.pos.y-.35;
+      const k = Math.min(1, dt*4);
+      L.yaw = K.angLerp(L.yaw, Math.atan2(-dx,-dz), k);
+      L.pitch = lerp(L.pitch, clamp(Math.atan2(dy, Math.hypot(dx,dz)), -.3, 1.2), k);
+      if(!(K.shake>.15)) K.shake = .15;
+    }
+  }
   else if(ghost){
     eye = gdef.eye + Math.sin(K.gameTime*(G.gk==='krasue'?1.7:1.1))*(G.gk==='krasue'?.06:.03);
     if(moved && G.gk!=='krasue'){ L.bob += dt*(G.gk==='pop'?6:4.5); eye += Math.sin(L.bob)*.05; L.stepD += dist; if(L.stepD>1.8){ L.stepD=0; K.sfx.step(null,.25); } }
@@ -211,7 +222,7 @@ K.updateRemotes = function(dt){
       g.visible = !inv;
       /* it turns its head to watch you. The เปรต's neck turns further than a neck should */
       const cdx = K.camera.position.x-v.pos.x, cdz = K.camera.position.z-v.pos.z, cd = Math.hypot(cdx,cdz);
-      const meAlive = !iAmSpect && P[K.NET.me] && P[K.NET.me].s==='alive';
+      const meAlive = !iAmSpect && P[K.NET.me] && (P[K.NET.me].s==='alive' || P[K.NET.me].s==='down');
       let rel = Math.atan2(-cdx,-cdz) - v.yaw; rel = Math.atan2(Math.sin(rel), Math.cos(rel));
       const lim = m.kind==='pret' ? 1.75 : m.kind==='pop' ? 1.0 : 1.2;
       const want = meAlive && cd<13 && Math.abs(rel)<lim+.6 ? clamp(rel,-lim,lim) : 0;
