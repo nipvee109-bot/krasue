@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#06070a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>กระสือวัดร้าง</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Srisakdi:wght@400;700&family=Sarabun:wght@300;400;600&display=swap">
+<link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="game"></canvas>
+  <canvas id="grain" width="320" height="180"></canvas>
+  <div id="tint"></div>
+  <div id="hurt"></div>
+  <div id="vignette"></div>
+  <div id="dread"></div>
+  <div id="flash"></div>
+
+  <div id="hudWrap" hidden>
+    <div class="hud" id="cross"></div>
+    <div class="hud" id="prompt"></div>
+    <div class="hud track" id="hold" hidden><div class="fill" id="holdFill"></div></div>
+    <canvas class="hud" id="sc" width="180" height="180" hidden></canvas>
+    <div class="hud" id="toast"></div>
+    <div class="hud" id="status"></div>
+    <div class="hud" id="clock"><span id="clockT">7:00</span><small id="ghostId"></small></div>
+    <div class="hud" id="team"><h3>เพื่อน</h3><ul></ul></div>
+    <div class="hud" id="goal"><h3>เป้าหมาย</h3><ul></ul></div>
+    <div class="hud" id="bars">
+      <div class="bar"><span id="barALabel">ไฟฉาย</span><div class="track"><div class="fill" id="barA"></div></div></div>
+      <div class="bar"><span id="barBLabel">แรง</span><div class="track"><div class="fill" id="barB"></div></div></div>
+    </div>
+    <div class="hud" id="inv">
+      <div id="invCharm"></div>
+      <div id="invOffer"></div>
+      <div id="mic"><span class="dot"></span><span id="micT"></span></div>
+    </div>
+  </div>
+
+  <!-- touch controls: joystick appears where the left thumb lands, drag the right side to look -->
+  <div id="touch" hidden>
+    <div id="stick" hidden><div id="knob"></div></div>
+    <button class="tb pause" data-act="pause" aria-label="เมนู">☰</button>
+    <div class="pad">
+      <button class="tb big r-surv" data-act="use">ใช้</button>
+      <button class="tb r-surv" data-act="light">ไฟฉาย</button>
+      <button class="tb r-surv" data-act="charm">ของขลัง</button>
+      <button class="tb r-surv" data-act="sig">สัญญาณ</button>
+      <button class="tb r-surv" data-act="crouch" id="tCrouch">ย่อ</button>
+      <button class="tb r-surv r-spect r-lobby" data-act="mic" id="tMic">ไมค์</button>
+      <button class="tb big r-ghost" data-act="atk">ตะครุบ</button>
+      <button class="tb r-ghost" data-act="skill" id="tSkill">สกิล</button>
+      <button class="tb r-ghost" data-act="hold">สูบ<small>กดค้าง</small></button>
+      <button class="tb big r-spect" data-act="wisp">ชี้ทาง</button>
+      <button class="tb r-spect" data-act="up">ขึ้น</button>
+      <button class="tb r-spect" data-act="down">ลง</button>
+    </div>
+    <div class="sigs">
+      <button class="tb" data-act="sig0">มาทางนี้</button>
+      <button class="tb" data-act="sig1">ช่วยด้วย</button>
+      <button class="tb" data-act="sig2">ผีอยู่นี่</button>
+    </div>
+  </div>
+
+  <div id="scare" hidden><canvas id="scareC" width="256" height="256"></canvas></div>
+  <div id="rotate"><p>หมุนเครื่องเป็นแนวนอนเพื่อเล่น</p></div>
+
+  <div class="card" id="menuCard">
+    <div class="card-in">
+      <p class="sub">เกมผีเล่นกับเพื่อน 2–6 คน · คอมและมือถือเล่นห้องเดียวกันได้</p>
+      <h1>กระสือวัดร้าง</h1>
+      <p class="story">คืนนั้นพวกคุณหลงเข้ามาในวัดร้างกลางทุ่ง ประตูวัดปิดตายอยู่ข้างหลัง ต้องจุดเทียนบูชาและถวายของไหว้ที่ศาลพระภูมิ ประตูถึงจะเปิด... แต่คืนนี้มีผีออกหากิน และมันคือหนึ่งในเพื่อนของคุณ</p>
+      <label class="field">ชื่อของคุณ<input class="txt" id="nameIn" maxlength="14" autocomplete="off" spellcheck="false"></label>
+      <button class="small" id="lookBtn">แต่งตัว</button>
+      <button class="go" id="hostBtn">สร้างห้อง</button>
+      <p class="or">หรือ</p>
+      <div class="join">
+        <input class="txt" id="codeIn" maxlength="4" placeholder="รหัส" autocomplete="off" spellcheck="false" aria-label="รหัสห้อง">
+        <button class="small" id="joinBtn">เข้าห้องเพื่อน</button>
+      </div>
+      <p class="note" id="menuMsg" aria-live="polite"></p>
+      <p class="note">ในเกมมีเสียงคุยกันได้เมื่ออยู่ใกล้ๆ เกมจะขอใช้ไมค์ตอนเข้าห้อง (ไม่ให้ก็เล่นได้ ใช้ปุ่มส่งสัญญาณแทน)</p>
+    </div>
+  </div>
+
+  <div class="card" id="lookCard" hidden>
+    <div class="card-in">
+      <p class="sub">แต่งตัว</p>
+      <canvas id="lookCanvas" width="200" height="260"></canvas>
+      <div class="opts">
+        <p class="label">สีเสื้อ</p>
+        <div class="swatches" id="shirtBtns"></div>
+        <p class="label">ทรงผม</p>
+        <div class="qbtns" id="hairBtns"></div>
+        <p class="label">หมวก</p>
+        <div class="qbtns" id="hatBtns"></div>
+      </div>
+      <button class="go" id="lookDone">เสร็จ</button>
+    </div>
+  </div>
+
+  <div class="card" id="lobbyCard" hidden>
+    <div class="card-in">
+      <p class="sub">รหัสห้อง</p>
+      <p class="code-big" id="roomCode">----</p>
+      <button class="small" id="copyBtn">คัดลอกลิงก์ชวนเพื่อน</button>
+      <ul class="plist" id="plist"></ul>
+      <p class="note" id="queueNote"></p>
+      <div class="ghostpick" id="ghostPick" hidden>
+        <p class="label">รอบหน้าคุณเป็นผี เลือกร่าง (คนหนีจะไม่รู้จนกว่าจะเจอ)</p>
+        <div class="gbtns" id="gBtns"></div>
+        <p class="note" id="gBlurb"></p>
+      </div>
+      <div class="opts" id="dawnBox">
+        <p class="label">เวลาจนฟ้าสาง</p>
+        <div class="qbtns" id="dawnBtns"></div>
+      </div>
+      <p class="note" id="lobbyNote"></p>
+      <div class="row">
+        <button class="small" id="lobbyLook">แต่งตัว</button>
+        <button class="small" id="lobbyMic">ไมค์</button>
+      </div>
+      <button class="go" id="startBtn" hidden>เริ่มเกม</button>
+      <div class="keys desk">
+        <div><kbd>W A S D</kbd> เดิน</div>
+        <div><kbd>เมาส์</kbd> หันมอง</div>
+        <div><kbd>Shift</kbd> วิ่ง</div>
+        <div><kbd>C</kbd> ย่อตัว เดินเงียบ</div>
+        <div><kbd>F</kbd> ไฟฉาย</div>
+        <div><kbd>E</kbd> เก็บของ / กดค้าง จุดเทียน วางของไหว้ ช่วยเพื่อน</div>
+        <div><kbd>Space</kbd> กดตอนวงจังหวะขึ้น</div>
+        <div><kbd>R</kbd> ใช้ของขลัง</div>
+        <div><kbd>1 2 3</kbd> ส่งสัญญาณ</div>
+        <div><kbd>M</kbd> ปิด/เปิดไมค์</div>
+        <div><kbd>คลิก</kbd> ตะครุบ (ผี)</div>
+        <div><kbd>Q</kbd> สกิลผี</div>
+        <div><kbd>Esc</kbd> เมนู</div>
+      </div>
+      <p class="note touchonly">มือถือ: นิ้วซ้ายแตะค้างเพื่อเดิน (ดันสุดขอบคือวิ่ง) ลากด้านขวาเพื่อหันมอง ปุ่มอยู่มุมขวา</p>
+      <button class="small" id="leaveBtn">ออกจากห้อง</button>
+    </div>
+  </div>
+
+  <div class="card" id="roleCard" hidden>
+    <div class="card-in">
+      <p class="sub" id="roleSub">คุณคือ</p>
+      <h1 id="roleTitle">คนหนี</h1>
+      <p class="story" id="roleText"></p>
+      <button class="go" id="readyBtn">พร้อม</button>
+    </div>
+  </div>
+
+  <div class="card" id="pauseCard" hidden>
+    <div class="card-in">
+      <p class="sub">เมนู (เกมยังเดินอยู่)</p>
+      <h1>กระสือวัดร้าง</h1>
+      <button class="go" id="resumeBtn">กลับเข้าเกม</button>
+      <div class="opts">
+        <p class="label" id="qLabel">คุณภาพภาพ</p>
+        <div class="qbtns" role="radiogroup" aria-labelledby="qLabel">
+          <button type="button" role="radio" data-q="low">ต่ำ</button>
+          <button type="button" role="radio" data-q="medium">กลาง</button>
+          <button type="button" role="radio" data-q="high">สูง</button>
+        </div>
+        <p class="label">เสียง</p>
+        <label>เสียงทั้งหมด <input type="range" min="0" max="100" step="5" data-v="master"></label>
+        <label>บรรยากาศ <input type="range" min="0" max="100" step="5" data-v="amb"></label>
+        <label>เสียงเพื่อน <input type="range" min="0" max="150" step="5" data-v="voice"></label>
+        <label>ความไวการหัน <input type="range" min="40" max="200" step="10" id="sensIn"></label>
+        <label class="chk"><input type="checkbox" id="scareBox"> หน้าผีพุ่งเข้าจอตอนล้ม</label>
+        <label class="chk desk"><input type="checkbox" id="dragLookBox"> หันด้วยการกดค้างแล้วลากเมาส์</label>
+      </div>
+      <button class="small" id="pauseMic">ไมค์</button>
+      <button class="small" id="quitBtn">ออกจากห้อง</button>
+    </div>
+  </div>
+
+  <div class="card" id="endCard" hidden>
+    <div class="card-in">
+      <p class="sub" id="endSub">จบรอบ</p>
+      <h1 id="endTitle">ฟ้าสางแล้ว</h1>
+      <ul class="res" id="endList"></ul>
+      <button class="go" id="againBtn">เล่นอีกรอบ</button>
+      <p class="note" id="endNote"></p>
+      <button class="small" id="endLeaveBtn">ออกจากห้อง</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script>
+// PeerJS fallback: try unpkg if cdnjs did not load
+if(!window.Peer) document.write('<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"><\/script>');
+</script>
+<!-- no build step: plain scripts, loaded in order, sharing the window.K namespace -->
+<script src="js/core.js"></script>
+<script src="js/render.js"></script>
+<script src="js/map.js"></script>
+<script src="js/models.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/net.js"></script>
+<script src="js/voice.js"></script>
+<script src="js/host.js"></script>
+<script src="js/client.js"></script>
+<script src="js/play.js"></script>
+<script src="js/ambience.js"></script>
+<script src="js/input.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

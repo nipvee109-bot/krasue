@@ -1,0 +1,176 @@
+/* ambience: things that make the temple feel wrong — ground mist, lightning, shrouded statues, prayer flags,
+   will-o'-wisps over the graves, dread when the ghost is close, and the occasional figure that isn't there */
+(function(K){
+'use strict';
+const {scene, MAT, mr, clamp, V3, boxGeo, flat} = K;
+const G = K.G, L = K.L, P = K.P;
+const rnd = K.mulberry32(7771);
+const R = (a,b) => a+rnd()*(b-a);
+const world = K.world;
+
+/* ---------- shrouded statues (cloth over old images, like the one in the hall) ---------- */
+function shrouded(x,z,s,ry){
+  { const p = new V3(x,0,z); K.collide(p,.5*(s||1),{}); if(Math.hypot(p.x-x,p.z-z)>.01){ if(K.DEBUG) console.log('statue skipped', x, z); return null; } }
+  const g = new THREE.Group(); g.position.set(x,0,z); g.rotation.y = ry||0; g.scale.setScalar(s||1); world.add(g);
+  const base = new THREE.Mesh(boxGeo(.7,.3,.6), MAT.white); base.position.y=.15; g.add(base);
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.2,.38,.95,8), MAT.cloth); body.position.y=.78; g.add(body);
+  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(.19,1), MAT.cloth); head.position.set(0,1.38,-.03); head.scale.y=1.15; g.add(head);
+  const hem = new THREE.Mesh(new THREE.CylinderGeometry(.38,.42,.12,8,1,true), MAT.cloth); hem.position.y=.35; g.add(hem);
+  K.colliders.push({cx:x,cz:z,r:.42*(s||1),h:1.5});
+  return g;
+}
+for(const [x,z,s,r] of [[-8.6,10.2,1,.4],[-3.4,14.2,.9,-.6],[-19.3,-2.6,1,1.4],[6.4,-8.2,1.05,-1.2],[-6.4,-17.4,1,1.6],[12.3,9.4,.85,.3],[-23,1.5,1,1.57],[16.2,-3.4,.95,-.8]]) shrouded(x,z,s,r);
+
+/* ---------- ธงตะขาบ (long prayer flags) in front of the hall ---------- */
+const FLAGS = [];
+{
+  const clothM = new THREE.MeshPhongMaterial({color:0x8a7a5a, side:THREE.DoubleSide, flatShading:true, transparent:true, opacity:.92});
+  for(const x of [-2.7,2.7]){
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(.05,.07,6.2,6), MAT.wood); pole.position.set(x,3.1,-4.6); world.add(pole);
+    K.colliders.push({cx:x,cz:-4.6,r:.12,h:6.2});
+    const pivot = new THREE.Group(); pivot.position.set(x+.08,6,-4.6); world.add(pivot);
+    const geo = new THREE.PlaneGeometry(.42,3.6,1,8); geo.translate(0,-1.8,0);
+    const flag = new THREE.Mesh(geo, clothM); pivot.add(flag);
+    for(let i=1;i<6;i++){ const bar=new THREE.Mesh(boxGeo(.5,.03,.03), MAT.wood); bar.position.set(0,-i*.6,0); pivot.add(bar); }
+    FLAGS.push({pivot, geo, base:geo.attributes.position.array.slice(), ph:R(0,6)});
+  }
+}
+/* ---------- broken paper lanterns under the pavilion ---------- */
+const LANTERNS = [];
+for(const [x,z] of [[-16.5,-1.4],[-13.2,3.4],[-18.1,4.2]]){
+  const pivot = new THREE.Group(); pivot.position.set(x,4.25,z); world.add(pivot);
+  const str = new THREE.Mesh(boxGeo(.01,.6,.01), flat(0x111111)); str.position.y=-.3; pivot.add(str);
+  const lan = new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,.36,8), flat(0x6a1a14,{transparent:true,opacity:.9})); lan.position.y=-.78; pivot.add(lan);
+  const torn = new THREE.Mesh(boxGeo(.1,.25,.01), flat(0x8a2a1a)); torn.position.set(.1,-1.05,0); torn.rotation.z=.4; pivot.add(torn);
+  LANTERNS.push({pivot, ph:R(0,6)});
+}
+
+/* ---------- moon halo ---------- */
+{
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({map:K.glowTex(200,190,170), transparent:true, opacity:.35, blending:THREE.AdditiveBlending, depthWrite:false, fog:false}));
+  halo.position.set(-26,26,-40); halo.scale.setScalar(16); K.sky.add(halo);
+}
+
+/* ---------- ground mist ---------- */
+const mistTex = K.canvasTex(64,64,(g)=>{
+  const id = g.createImageData(64,64), d = id.data;
+  for(let y=0;y<64;y++) for(let x=0;x<64;x++){
+    const dx=(x-32)/32, dy=(y-32)/32, r=Math.sqrt(dx*dx+dy*dy);
+    const n = .55+.45*Math.sin(x*.31+Math.sin(y*.23)*2)*Math.cos(y*.27+x*.05);
+    const a = Math.max(0,1-r)**1.6*n;
+    const i=(y*64+x)*4; d[i]=d[i+1]=d[i+2]=255; d[i+3]=a*255|0;
+  }
+  g.putImageData(id,0,0);
+});
+mistTex.magFilter = THREE.LinearFilter; mistTex.minFilter = THREE.LinearFilter;
+const MIST = [];
+for(let i=0;i<36;i++){
+  const m = new THREE.Sprite(new THREE.SpriteMaterial({map:mistTex, color:0x9aa6ba, transparent:true, opacity:R(.2,.32), depthWrite:false}));
+  m.position.set(R(-22,22), R(.25,.6), R(-22,22)); const s=R(5,9); m.scale.set(s, s*.32, 1);
+  m.material.rotation = R(0,6);
+  m.userData = {vx:R(-.12,.12), vz:R(-.08,.08), base:m.material.opacity};
+  scene.add(m); MIST.push(m);
+}
+/* ---------- ผีพราย: will-o'-wisps drifting over the graves ---------- */
+const wispMat = new THREE.SpriteMaterial({map:K.glowTex(120,200,255), transparent:true, blending:THREE.AdditiveBlending, depthWrite:false});
+const WISPS = [];
+for(let i=0;i<6;i++){
+  const s = new THREE.Sprite(wispMat); s.scale.setScalar(.28); scene.add(s);
+  WISPS.push({s, cx:R(9,20), cz:R(8,17), r:R(.6,1.8), sp:R(.15,.4), ph:R(0,6), y:R(.6,1.4)});
+}
+
+/* ---------- lightning ---------- */
+const LT = {next:mr(8,20), t:-1, seq:null};
+const FLASH_COL = new THREE.Color(0x4a5670), tmpC = new THREE.Color();
+function strike(){
+  LT.t = 0; LT.seq = [[0,.07],[.13,.19],[.26,.36]];
+  const d = mr(.6,2.6);
+  setTimeout(()=>K.sfx.thunder && K.sfx.thunder(), d*1000);
+}
+function flashLevel(){
+  if(LT.t<0) return 0;
+  for(const [a,b] of LT.seq) if(LT.t>=a && LT.t<=b) return 1;
+  return 0;
+}
+
+/* ---------- the figure that isn't there ---------- */
+const fig = (function(){
+  const g = new THREE.Group(); scene.add(g); g.visible = false;
+  const m = new THREE.MeshBasicMaterial({color:0xb8b4a8, transparent:true, opacity:.85});
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.16,.34,1.4,7), m); body.position.y=.7; g.add(body);
+  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(.17,1), m); head.position.y=1.55; g.add(head);
+  const face = new THREE.Mesh(new THREE.CircleGeometry(.09,8), new THREE.MeshBasicMaterial({color:0x050505})); face.position.set(0,1.53,-.16); face.rotation.y=Math.PI; g.add(face);
+  return {g, m, t:0, next:mr(50,90), lit:0};
+})();
+function trySpawnFigure(){
+  const me = P[K.NET.me];
+  if(!me || me.role!=='surv' || me.s!=='alive' || G.ph!=='play') return;
+  for(const v of Object.values(P)) if(v.id!==K.NET.me && v.role==='surv' && v.s==='alive' && v.pos.distanceTo(L.pos)<9) return;
+  const g = K.ghostView(); if(g && g.pos.distanceTo(L.pos)<16) return;
+  const side = (Math.random()<.5?-1:1)*mr(.25,.5), d = mr(11,15);
+  const a = L.yaw + side, x = L.pos.x - Math.sin(a)*d, z = L.pos.z - Math.cos(a)*d;
+  if(Math.abs(x)>23 || Math.abs(z)>23) return;
+  const p = new V3(x,0,z); K.collide(p,.4,{}); if(p.distanceTo(new V3(x,0,z))>.05) return;
+  if(!K.lineOfSight(L.pos.x,1.6,L.pos.z,x,1.3,z)) return;
+  fig.g.position.set(x,0,z); fig.g.lookAt(L.pos.x,0,L.pos.z); fig.g.rotateY(Math.PI);
+  fig.g.visible = true; fig.t = mr(1.6,2.6); fig.lit = 0; fig.m.opacity = .85;
+}
+function updateFigure(dt){
+  fig.next -= dt;
+  if(fig.next<=0){ fig.next = mr(55,110); trySpawnFigure(); }
+  if(!fig.g.visible) return;
+  fig.t -= dt;
+  const d = fig.g.position.distanceTo(new V3(L.pos.x,0,L.pos.z));
+  const f = new V3(0,0,-1).applyQuaternion(K.camera.quaternion), to = fig.g.position.clone().setY(1.3).sub(K.camera.position).normalize();
+  if(L.light && f.dot(to)>.97) fig.lit += dt;
+  if(fig.t<=0 || d<7 || fig.lit>.25 || !G.inGame){
+    fig.g.visible = false;
+    if(G.inGame){ K.sfx.haunt(K.at({x:fig.g.position.x,y:1.4,z:fig.g.position.z})); if(fig.lit>.25 || d<7) K.sfx.sting(); }
+  }
+}
+
+/* ---------- per frame ---------- */
+const dread = K.$('#dread'), grainEl = K.$('#grain');
+K.fear = 0;
+K.updateAmbience = function(dt){
+  const t = K.gameTime;
+  // swaying cloth
+  for(const f of FLAGS){
+    const p = f.geo.attributes.position, b = f.base;
+    for(let i=0;i<p.count;i++){ const y=b[i*3+1]; const k=-y/3.6; p.array[i*3+2] = b[i*3+2] + Math.sin(t*1.6+f.ph+y*1.3)*.35*k*k + Math.sin(t*.4+f.ph)*.25*k; }
+    p.needsUpdate = true; f.pivot.rotation.z = Math.sin(t*.7+f.ph)*.04;
+  }
+  for(const l of LANTERNS){ l.pivot.rotation.z = Math.sin(t*1.1+l.ph)*.12; l.pivot.rotation.x = Math.sin(t*.8+l.ph*2)*.08; }
+  // mist drifts around me; banks that fall too far behind are moved back out ahead
+  const nm = K.QUALITY==='low' ? 10 : K.QUALITY==='medium' ? 22 : 34;
+  const cx = K.camera.position.x, cz = K.camera.position.z;
+  MIST.forEach((m,i)=>{
+    m.visible = i<nm; if(!m.visible) return;
+    m.position.x += m.userData.vx*dt; m.position.z += m.userData.vz*dt;
+    const dx = m.position.x-cx, dz = m.position.z-cz;
+    if(dx*dx+dz*dz>17*17){ const a = Math.random()*Math.PI*2, r = mr(6,16); m.position.x = cx+Math.cos(a)*r; m.position.z = cz+Math.sin(a)*r; }
+    m.material.rotation += dt*.02;
+  });
+  for(const w of WISPS){ const a = t*w.sp+w.ph; w.s.position.set(w.cx+Math.cos(a)*w.r, w.y+Math.sin(t*1.3+w.ph)*.25, w.cz+Math.sin(a*1.3)*w.r); w.s.material.opacity = .5+.5*Math.sin(t*3+w.ph); }
+  // lightning
+  LT.next -= dt;
+  if(LT.next<=0){ LT.next = G.inGame ? mr(40,90) : mr(12,26); strike(); }
+  if(LT.t>=0){ LT.t += dt; if(LT.t>.5) LT.t = -1; }
+  const fl = flashLevel();
+  K.amb.intensity = (K.ambBase||.55) + fl*1.6;
+  K.moonLight.intensity = (K.moonBase||.3) + fl*1.4;
+  if(fl){ tmpC.copy(K.scene.fog.color).lerp(FLASH_COL,.7); K.scene.background.copy(tmpC); }
+  else K.scene.background.copy(K.scene.fog.color);
+  // dread: darker edges, heavier grain, a flickering torch when the ghost is close
+  let fear = 0;
+  const me = P[K.NET.me], g = K.ghostView();
+  if(G.inGame && G.role==='surv' && me && (me.s==='alive'||me.s==='down') && g && G.ph==='play' && !(g.flags&8)){
+    const d = g.pos.distanceTo(new V3(L.pos.x, g.pos.y, L.pos.z));
+    fear = clamp(1-(d-3)/12, 0, 1);
+  }
+  K.fear += (fear-K.fear)*Math.min(1,dt*3);
+  dread.style.opacity = (K.fear*.85*(.85+.15*Math.sin(t*7))).toFixed(3);
+  grainEl.style.opacity = (.05 + K.fear*.13).toFixed(3);
+  if(G.inGame) updateFigure(dt); else if(fig.g.visible) fig.g.visible = false;
+};
+})(window.K);
