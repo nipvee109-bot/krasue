@@ -63,6 +63,15 @@ function gateCheck(){
   if(H.candles.every(v=>v>=1) && H.offers.every(o=>o.placed)){ H.gate = true; K.broadcast({t:'e', k:'gate'}); }
 }
 function survivorsNotGhost(){ return Object.values(H.players).filter(q=>q.role!=='ghost'); }
+/* every page in this round, the host's own included (not someone who just knocked and is being turned away) */
+const recipients = () => Object.keys(K.NET.conns).filter(id=>K.NET.conns[id].open && H.players[id]).concat(K.NET.me && H.players[K.NET.me] ? [K.NET.me] : []);
+/* disguise mode keeps the ghost's name off the survivors' machines, not just off their screens: until it first sheds the
+   disguise in front of everyone, they get a copy of the start message and of every snapshot in which the ghost is just one
+   more person. Only the ghost itself, and anyone who caught its red eyes in a lightning flash, gets the real data.
+   The host's own page runs the whole game, so a host can still cheat; this protects the secret from the other players. */
+const secretGhost = () => { if(!H.dis) return null; const g = Object.values(H.players).find(q=>q.role==='ghost'); return g && !g.outed ? g : null; };
+const knows = (gh, id) => id===gh.i || !!gh.seen[id];
+function reveal(gh, ev){ gh.outed = true; K.broadcast(ev); }   // transforming is public: from here on everyone is told
 function sendSurv(m){ for(const q of survivorsNotGhost()) K.sendTo(q.i, m); }
 
 K.hostRecv = function(id, m){
@@ -131,7 +140,7 @@ K.hostRecv = function(id, m){
           const gy = Math.min(gh.y, 2.2);
           if(along>-.3 && along<CFG.saltRange && perp<1.1 && K.lineOfSight(p.x,1.4,p.z,gh.x,gy,gh.z)){
             hit = true; p.stat.stun++; gh.stat.stun++;
-            if(gh.dis){ unmask(gh, true); K.broadcast({t:'e', k:'morph', who:gh.i, forced:1, by:id}); }   // salt burns the disguise off
+            if(gh.dis){ unmask(gh, true); reveal(gh, {t:'e', k:'morph', who:gh.i, forced:1, by:id}); }   // salt burns the disguise off
             gh.stunUntil = Math.max(gh.stunUntil, H.t+GHOSTS[gh.gk].saltStun);
             gh.lungeUntil = 0; gh.invUntil = 0; gh.atkReady = Math.max(gh.atkReady, gh.stunUntil);
           }
@@ -149,7 +158,7 @@ K.hostRecv = function(id, m){
       if(!p || p.role!=='ghost' || !play || H.t<p.stunUntil) return;
       if(p.dis){   // disguised: the attack button sheds the disguise
         if(p.morphUntil || H.t<p.formReady) return;
-        p.morphUntil = H.t+CFG.morphTime; K.broadcast({t:'e', k:'morph', who:id}); return;
+        p.morphUntil = H.t+CFG.morphTime; reveal(p, {t:'e', k:'morph', who:id}); return;
       }
       if(H.t<p.atkReady) return;
       p.lungeUntil = H.t+CFG.lungeTime; p.lungeHit=false; p.atkReady = H.t+99; p.invUntil = 0; return;
@@ -199,7 +208,7 @@ K.hostStart = function(){
   H.bot = null;
   H.pick = null;
   H.players = {}; H.holds = {}; H.holy = [];
-  H.t = 0; H.wake = CFG.wake; H.left = H.dawn; H.phase = 'wake'; H.gate = false; H.gk = gk;
+  H.t = 0; H.wake = CFG.wake; H.left = H.dawn; H.phase = 'wake'; H.gate = false; H.gk = gk; H.dis = dis; H.lt = K.mr(12,26); H.crow = [];
   H.altars = spread(K.ALTAR_SPOTS, CFG.candles, 10);
   H.candles = H.altars.map(()=>0);
   const offerKinds = ['garland','incense'];
@@ -215,13 +224,15 @@ K.hostStart = function(){
     const x = inRow ? (row.indexOf(q.i) - (nRow-1)/2)*1.3 : 0;
     const z = inRow ? 21.2 : -3.6, a = inRow ? 0 : Math.PI;
     H.players[q.i] = {i:q.i, n:q.n, role, gk:role==='ghost'?gk:null, mob:q.mob, x, y:role==='ghost'&&!dis?GHOSTS[gk].eye:0, z, a, b:0, f:1,
-      dis: role==='ghost' && dis, bot: q.i==='bot', morphUntil:0, formUntil:0, formReady: CFG.wake+CFG.formFirst,
+      dis: role==='ghost' && dis, outed:false, seen:{}, bot: q.i==='bot', morphUntil:0, formUntil:0, formReady: CFG.wake+CFG.formFirst,
       h:2, s:'alive', bl:0, rv:0, fn:0, ch:bot && role==='surv' && H.lobby.length===1 ? 'takrut' : null, of:-1, pl:0, slowUntil:0, pingReady:0, wispReady:0,
       stunAcc:0, stunUntil:0, immUntil:0, invUntil:0, skillUntil:0, skillReady:0, atkReady:0, lungeUntil:0, lungeHit:false,
       stat:{c:0, o:0, rv:0, stun:0, hit:0, down:0, kill:0}};   // for the results screen
     return {i:q.i, n:q.n, look:q.look, x, z, a};
   });
-  K.broadcast({t:'start', ghost, gk, mode:dis?'disguise':'normal', dawn:H.dawn, altars:H.altars, offers:H.offers.map(o=>({k:o.k,x:o.x,z:o.z})), charms:H.charms.map(c=>({k:c.k,x:c.x,z:c.z})), p:list});
+  const msg = {t:'start', ghost, gk, mode:dis?'disguise':'normal', dawn:H.dawn, altars:H.altars, offers:H.offers.map(o=>({k:o.k,x:o.x,z:o.z})), charms:H.charms.map(c=>({k:c.k,x:c.x,z:c.z})), p:list};
+  if(dis){ const pub = Object.assign({}, msg, {ghost:null}); for(const id of recipients()) K.sendTo(id, id===ghost ? msg : pub); }
+  else K.broadcast(msg);
   if(bot) K.botPrepare(gk);   // after the start message has set this round's altars
 };
 
@@ -283,7 +294,7 @@ function hostTick(dt){
     if(gh && gh.bot) K.botTick(gh, dt, surv);
     if(gh && H.mode==='disguise'){
       if(gh.dis && gh.morphUntil && H.t>=gh.morphUntil) unmask(gh, false);
-      else if(gh.dis && (H.gate && !gh.morphUntil)) { unmask(gh, false); K.broadcast({t:'e', k:'morph', who:gh.i, forced:2}); }
+      else if(gh.dis && (H.gate && !gh.morphUntil)) { unmask(gh, false); reveal(gh, {t:'e', k:'morph', who:gh.i, forced:2}); }
       else if(!gh.dis && gh.formUntil && H.t>=gh.formUntil && H.t>=gh.lungeUntil && H.t>=gh.stunUntil){
         gh.dis = true; gh.formUntil = 0; gh.formReady = H.t+CFG.formCD; gh.invUntil = 0; gh.skillUntil = Math.min(gh.skillUntil, H.t);
         K.broadcast({t:'e', k:'unmorph', who:gh.i});
@@ -344,13 +355,22 @@ function hostTick(dt){
     }
     if(!gh && !(K.DEBUG && all.length===1)){ hostEnd('ghostleft'); return; }
   }
-  K.broadcast(snapshot());
+  if(gh && H.dis) disguiseClues(gh, surv, dt);
+  sendSnap();
 }
 K.hostTick = hostTick;
-function snapshot(){
+function sendSnap(){
+  const gh = secretGhost();
+  if(!gh){ K.broadcast(snapshot()); return; }
+  const full = snapshot(), pub = snapshot(gh);
+  for(const id of recipients()) K.sendTo(id, knows(gh, id) ? full : pub);
+}
+/* hide: the disguised ghost, sent exactly like a survivor (no disguise flags, no ghost timers) */
+function snapshot(hide){
   const p = [];
   for(const id in H.players){
     const q = H.players[id];
+    if(q===hide){ p.push({i:q.i, x:r2(q.x), y:0, z:r2(q.z), a:r2(q.a), b:r2(q.b), f:q.f & 0x247, h:q.h, s:q.s, ch:'', of:-1}); continue; }
     let f = q.f & 0x247;   // 1 light, 2 run, 4 move, 64 holding, 512 crouched
     if(q.dis) f|=1024;     // disguised as a person
     if(q.morphUntil) f|=2048;
@@ -370,6 +390,41 @@ function snapshot(){
     o:H.offers.map(o=>[r2(o.x), r2(o.z), o.by||'', o.placed?1:0]),
     ch:H.charms.map(c=>[c.x, c.z, c.k, c.up?1:0]), p};
 }
+/* disguise-mode clues that survivors' pages can no longer work out themselves, since they are not told who the ghost is */
+function disguiseClues(gh, surv, dt){
+  const masked = gh.dis && !gh.morphUntil, hidden = masked && !gh.outed;
+  // lightning: one flash for everyone. Whoever is looking at the disguised ghost sees its red eyes, and from then on knows
+  H.lt -= dt;
+  if(H.lt<=0){
+    H.lt = K.mr(40,90);
+    for(const id of recipients()){
+      const q = H.players[id], ev = {t:'e', k:'lt'};
+      if(hidden && q && q!==gh && !gh.seen[id] && seesEyes(q, gh)){ gh.seen[id] = true; ev.eye = gh.i; }
+      K.sendTo(id, ev);
+    }
+  }
+  if(H.phase!=='play') return;
+  // a takrut trembles in the hand when the ghost stands close, whoever it is pretending to be
+  if(masked) for(const q of surv){
+    if(q.ch!=='takrut' || q.s!=='alive' || H.t<(q.takrutT||0) || Math.hypot(gh.x-q.x, gh.z-q.z)>=4) continue;
+    q.takrutT = H.t+7; K.sendTo(q.i, {t:'e', k:'takrut'});
+  }
+  // crows can tell what walks among the people: they take off at 4.5 m from it. Once it is outed every page knows and does this itself
+  if(!gh.outed) (K.CROW_HOMES||[]).forEach((c,i)=>{
+    const near = Math.hypot(gh.x-c.x, gh.z-c.z) < 4.5;
+    if(near && !H.crow[i]) for(const id of recipients()){ const q = H.players[id]; if(q && q!==gh && Math.hypot(q.x-c.x, q.z-c.z)<25) K.sendTo(id, {t:'e', k:'crow', i}); }   // only those close enough to see or hear it
+    H.crow[i] = near;
+  });
+}
+/* would player q see the ghost's eyes in a flash right now: close enough, roughly in view, nothing in the way */
+function seesEyes(q, gh){
+  const ey = q.s==='alive' ? 1.5 : q.s==='down' ? .35 : Math.max(1.5, q.y||0);
+  const dx = gh.x-q.x, dy = 1.7-ey, dz = gh.z-q.z, d = Math.hypot(dx,dy,dz);
+  if(d>22 || d<.01) return false;
+  const cb = Math.cos(q.b), lx = -Math.sin(q.a)*cb, ly = Math.sin(q.b), lz = -Math.cos(q.a)*cb;
+  if((dx*lx+dy*ly+dz*lz)/d < .5) return false;
+  return K.lineOfSight(q.x,ey,q.z,gh.x,1.7,gh.z);
+}
 /* the disguise comes off: after the morph, or burnt off by salt (then it stands there stunned, plainly a ghost) */
 function unmask(gh, salt){
   gh.dis = false; gh.morphUntil = 0;
@@ -378,7 +433,7 @@ function unmask(gh, salt){
 }
 function hostEnd(why){
   H.phase = 'end'; H.holds = {};
-  K.broadcast(snapshot());
+  sendSnap();
   K.broadcast({t:'end', why, gk:H.gk, r:Object.values(H.players).map(q=>({i:q.i, n:q.n, role:q.role, s:q.s, st:{c:r2(q.stat.c), o:q.stat.o, rv:q.stat.rv, stun:q.stat.stun, hit:q.stat.hit, down:q.stat.down, kill:q.stat.kill}}))});
 }
 K.hostAgain = function(){ if(!K.NET.isHost) return; H.phase='lobby'; H.players={}; K.broadcastLobby(); };

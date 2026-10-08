@@ -103,6 +103,16 @@ function removePlayerView(id){
   delete P[id];
 }
 K.ghostView = () => Object.values(P).find(v=>v.role==='ghost');
+/* disguise mode: a survivor's page is not told who the ghost is, so everyone starts as a person. When it finds out
+   (the ghost transforms, or its eyes show in a lightning flash) that person becomes the face the ghost wears */
+function unveil(id){
+  const v = P[id]; if(!v || v.role==='ghost' || id===K.NET.me) return;
+  removePlayerView(id);
+  const g = addPlayerView({i:id, n:v.name, look:v.look, x:v.pos.x, z:v.pos.z, a:v.yaw}, 'ghost');
+  g.pos.copy(v.pos); g.tpos.copy(v.tpos); g.yaw = v.yaw; g.tyaw = v.tyaw; g.pitch = v.pitch; g.tpitch = v.tpitch; g.last.copy(v.last);
+  g.h = v.h; g.s = v.s; g.flags = v.flags|1024;
+  G.ghost = id;
+}
 K.nameOf = id => P[id] ? (id===K.NET.me ? 'คุณ' : P[id].name) : 'ใครบางคน';
 
 function onStart(m){
@@ -319,11 +329,6 @@ K.updateTrails = function(dt){
 /* survivors find out which ghost it is once they get a good look at it */
 let revealT = 0;
 K.checkReveal = function(dt){
-  // disguise mode: a takrut trembles when the ghost stands close, whoever it is pretending to be
-  if(G.mode==='disguise' && G.role==='surv' && L.ch==='takrut' && G.ph==='play' && K.gameTime>(L.takrutT||0)){
-    const g = K.ghostView(), me = P[K.NET.me];
-    if(g && masked(g) && me && me.s==='alive' && Math.hypot(g.pos.x-L.pos.x, g.pos.z-L.pos.z)<4){ L.takrutT = K.gameTime+7; K.toast('ตะกรุดในมือสั่น... ผีอยู่ใกล้ตัวคุณ', 3); K.sfx.block(); K.vibrate && K.vibrate(90); }
-  }
   if(G.role!=='surv' || G.known) return;
   revealT -= dt; if(revealT>0) return; revealT = .25;
   const g = K.ghostView(); if(!g || (g.flags&8) || masked(g) || G.ph!=='play') return;
@@ -349,6 +354,7 @@ function onEvent(m){
       if(ghost) K.toast('ออกหากินได้แล้ว'); else { K.toast('ผีตื่นแล้ว...'); const g=K.ghostView(); if(g) ghostVoice(g); }
       break;
     case 'morph': {
+      unveil(m.who);
       const g = P[m.who]; if(!g) break;
       g.morphT = m.forced ? CFG.morphTime*.6 : 0; g.morphing = true;
       if(ghost){ K.toast(m.forced===1 ? 'เกลือเผาร่างปลอมจนหลุด! ทุกคนเห็นคุณแล้ว' : m.forced===2 ? 'ประตูวัดเปิด! ร่างปลอมหลุด คุณคลั่งแล้ว' : 'กำลังกลายร่าง...', 4); K.shake = .5; sfx.growl(); break; }
@@ -435,6 +441,12 @@ function onEvent(m){
       if(!ghost && K.isSpect(me) && m.who===K.NET.me) K.toast('ส่งสัญญาณให้เพื่อนแล้ว');
       break;
     case 'leave': K.toast(`${m.n} ออกจากเกม`); break;
+    // disguise mode: clues the host works out, since this page doesn't know who the ghost is
+    case 'lt': K.strike(); if(m.eye) unveil(m.eye); break;
+    case 'takrut':
+      if(G.role==='surv' && L.ch==='takrut' && me && me.s==='alive'){ K.toast('ตะกรุดในมือสั่น... ผีอยู่ใกล้ตัวคุณ', 3); K.sfx.block(); K.vibrate && K.vibrate(90); }
+      break;
+    case 'crow': K.crowFlee && K.crowFlee(m.i); break;
   }
 }
 function ghostVoice(g){

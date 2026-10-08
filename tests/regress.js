@@ -274,7 +274,7 @@ T('disguise_secret', 'โหมดปลอมตัว: ไม่เผยต�
   for(const p of surv){
     const r = await p.evaluate(gid=>{
       const v = K.P[gid];
-      return {role: K.G.role, label: v && v.label && v.label.visible, model: v && v.dmodel && v.dmodel.g.visible, ghostModel: v && v.model && v.model.g.visible, roleText: document.querySelector('#roleTitle').textContent};
+      return {role: K.G.role, label: v && v.label && v.label.visible, ghostModel: !!(v && v.model && v.model.kind && v.model.g.visible), roleText: document.querySelector('#roleTitle').textContent};
     }, gid);
     out.push(r);
     check(r.role==='surv', 'role');
@@ -284,21 +284,185 @@ T('disguise_secret', 'โหมดปลอมตัว: ไม่เผยต�
   return 'ห้องรอ การ์ดบทบาท และโมเดลไม่เผยตัว';
 });
 
-T('disguise_net', 'โหมดปลอมตัว: ข้อมูลเครือข่ายที่คนหนีได้รับไม่บอกว่าใครเป็นผี', async ctx=>{
-  const ps = await room(ctx, 'RDNT', 3);
+/* record every message this page is sent from now on, raw, before the game reads it.
+   Joiners: listen on the ?local=1 BroadcastChannel for frames addressed to them. The host delivers to itself by calling K.clientRecv. */
+async function tap(p){
+  await p.evaluate(()=>{
+    window.__rx = [];
+    if(K.NET.isHost){ if(!K.__tapped){ K.__tapped = true; const o = K.clientRecv; K.clientRecv = m=>{ window.__rx.push(JSON.parse(JSON.stringify(m))); return o(m); }; } return; }
+    const bc = new BroadcastChannel('krasue-local');
+    bc.onmessage = ev=>{ const m = ev.data; if(m.k==='d' && m.to===K.NET.me) window.__rx.push(m.m); };
+  });
+}
+const rx = p => p.evaluate(()=>window.__rx.splice(0));
+/* anything in what a survivor was sent that names the disguised ghost */
+function leaks(msgs, gid){
+  const out = [];
+  for(const m of msgs){
+    const j = JSON.stringify(m);
+    if(j.includes('"ghost":"'+gid+'"')) out.push(m.t+' names the ghost');
+    if(j.includes('"role"') && m.t!=='end') out.push(m.t+' carries roles');
+    if(m.t==='s'){
+      const e = m.p.find(e=>e.i===gid), o = m.p.find(e=>e.i!==gid && e.s==='alive' && !('pl' in e));
+      if(!e) continue;
+      if(e.f & (8|16|32|128|256|1024|2048)) out.push('snapshot flags '+e.f);
+      for(const k of ['fr','fu','cd','sq','sa']) if(k in e) out.push('snapshot field '+k);
+      if(e.y!==0) out.push('snapshot height '+e.y);
+      if(o && Object.keys(e).sort().join()!==Object.keys(o).sort().join()) out.push('snapshot shape '+Object.keys(e).join());
+    }
+    if(m.t==='e' && (m.eye || ['morph','unmorph','inv','smell','stun'].includes(m.k))) out.push('event '+m.k);
+    if(m.t==='gt') out.push('ghost-type message');
+  }
+  return [...new Set(out)];
+}
+/* what a survivor's page holds about the ghost (anyone can read it from the console) */
+const pageLeaks = (p, gid) => p.evaluate(gid=>{
+  const v = K.P[gid], out = [];
+  if(K.G.ghost) out.push('G.ghost');
+  if(v && v.role!=='surv') out.push('player role '+v.role);
+  if(v && (v.flags&1024)) out.push('flag 1024');
+  if(K.ghostView()) out.push('ghostView');
+  if(!K.NET.isHost && Object.keys(K.H.players).length) out.push('host state');
+  return out;
+}, gid);
+
+T('disguise_net', 'โหมดปลอมตัว 6 คน: ข้อมูลเครือข่ายและ state ที่คนหนีได้รับไม่บอกว่าใครเป็นผี', async ctx=>{
+  const ps = await room(ctx, 'RDNT', 6);
   const [h] = ps;
   await H(h, ()=>K.hostSetMode('disguise'));
-  await start(ps); await skipWake(h); await sleep(1000);
+  for(const p of ps) await tap(p);
+  await start(ps); await skipWake(h); await sleep(1500);
   const {gid, surv} = await ghostAndSurv(ps);
-  const out = [];
+  const out = []; let n = 0;
   for(const p of surv){
-    // what a survivor's own client was told (anyone can read this from the console)
-    const r = await p.evaluate(gid=>{ const v=K.P[gid]; return {start: K.G.ghost===gid, role: v && v.role, flag: v ? v.flags&1024 : 0}; }, gid);
-    const leaks = [r.start && 'start.ghost', r.role==='ghost' && 'player role', r.flag && 'snapshot flag 1024'].filter(Boolean);
-    if(leaks.length) out.push(p.tag+': '+leaks.join(', '));
+    const msgs = await rx(p); n += msgs.length;
+    const l = leaks(msgs, gid).concat(await pageLeaks(p, gid));
+    if(!msgs.some(m=>m.t==='start') || !msgs.some(m=>m.t==='s')) l.push('tap saw no start/snapshot');
+    if(l.length) out.push(p.tag+': '+l.join(', '));
   }
-  check(!out.length, 'survivor client knows the ghost: '+out.join(' | '));
-  return 'ไม่มีข้อมูลบอกตัวผี';
+  check(!out.length, 'survivor knows the ghost: '+out.join(' | '));
+  return `คนหนี ${surv.length} คน ตรวจ ${n} ข้อความ ไม่มีข้อมูลบอกตัวผี`;
+});
+
+T('disguise_clues', 'โหมดปลอมตัว: เบาะแส ฟ้าแลบเห็นตาแดง ตะกรุดสั่น อีกาบินหนี มาจากโฮสต์ และไม่รั่วให้คนที่ไม่เห็น', async ctx=>{
+  const ps = await room(ctx, 'RDCL', 3);
+  const [h] = ps;
+  await H(h, ()=>K.hostSetMode('disguise'));
+  await start(ps); await skipWake(h);
+  const {g, gid, surv} = await ghostAndSurv(ps);
+  const [a, b] = surv, aid = await me(a), bid = await me(b);
+  for(const p of ps) await tap(p);
+  // crows: the ghost walks up to the perch at (4.5, 9); a watches from 7 m, out of the crows' own reach
+  await place(h, a, 4.5, 16, 0); await place(h, b, -6, 21, Math.PI); await place(h, g, 10, 14, 0); await sleep(400);
+  await rx(a);
+  await place(h, g, 4.5, 10, 0);
+  await until(a, ()=>window.__rx.some(m=>m.k==='crow'), null, 3000, 'crow event');
+  await until(a, ()=>K.crowState(2)==='fly', null, 2000, 'crows take off');
+  // takrut: b holds one and the ghost comes within 4 m
+  await H(h, id=>{ K.H.players[id].ch='takrut'; }, bid);
+  await until(b, ()=>K.L.ch==='takrut', null, 2000, 'takrut in hand');
+  await place(h, g, -6, 18.5, 0); await sleep(300);
+  await until(b, ()=>/ตะกรุดในมือสั่น/.test(document.querySelector('#toast').textContent), null, 3000, 'takrut trembles');
+  await H(h, id=>{ K.H.players[id].ch=null; }, bid);
+  // lightning: a looks straight at the ghost from 4 m, b stands behind it looking away
+  await place(h, g, 0, 17, 0); await place(h, a, 0, 21, 0); await place(h, b, 3, 21, Math.PI); await sleep(400);
+  await H(h, ()=>{ K.H.lt = .01; });
+  await until(a, gid=>K.G.ghost===gid && K.P[gid].role==='ghost', gid, 3000, 'eyes seen in the flash');
+  await sleep(300);
+  const shown = await a.evaluate(gid=>{ const v=K.P[gid]; return !!v.deyeMat && !!v.dmodel && v.dmodel.g.visible && !v.model.g.visible; }, gid);
+  check(shown, 'the unveiled ghost should still look like a person');
+  await until(b, ()=>window.__rx.some(m=>m.k==='lt'), null, 3000, 'flash on b');
+  await sleep(300);
+  const la = await rx(a), lb = await rx(b);
+  check(la.some(m=>m.k==='lt' && m.eye===gid), 'a was not shown the eyes');
+  const bl = leaks(lb, gid).concat(await pageLeaks(b, gid));
+  check(!bl.length, 'b, who looked away, learned who the ghost is: '+bl.join(', '));
+  const tk = lb.find(m=>m.k==='takrut');
+  check(!tk || Object.keys(tk).join()==='t,k', 'takrut event carries more than the tremble '+JSON.stringify(tk));
+  const cr = la.concat(lb).find(m=>m.k==='crow');
+  check(!cr || Object.keys(cr).join()==='t,k,i', 'crow event carries more than the perch '+JSON.stringify(cr));
+  // a, who saw the eyes, now gets the real data: the ghost is still in disguise for a
+  await sleep(500);
+  check(await a.evaluate(gid=>K.masked(K.P[gid]), gid), 'a should see the ghost as disguised (masked)');
+  return 'อีกาบิน ตะกรุดสั่น ฟ้าแลบเผยตาเฉพาะคนที่มอง คนอื่นไม่รู้';
+});
+
+T('disguise_spoof', 'โหมดปลอมตัว: ลูกห้องส่งข้อมูลปลอมเพื่อเป็นผีหรือเผยตัวคนอื่นไม่ได้', async ctx=>{
+  const ps = await room(ctx, 'RDSP', 3);
+  const [h] = ps;
+  await H(h, ()=>K.hostSetMode('disguise'));
+  await start(ps); await skipWake(h);
+  const {gid, surv} = await ghostAndSurv(ps);
+  const [a, b] = surv, aid = await me(a);
+  for(const p of ps) await tap(p);
+  await a.evaluate(aid=>{
+    const send = m=>K.sendHost(m);
+    send({t:'st', x:1, y:2, z:21, a:0, b:0, f:0xffff});
+    for(const m of [{t:'start', ghost:aid, gk:'pop', p:[]}, {t:'role', role:'ghost'}, {t:'gpick', k:'pop'}, {t:'atk'}, {t:'skill'},
+      {t:'e', k:'morph', who:aid}, {t:'s', p:[{i:aid, f:1024}]}, {t:'end', why:'done', r:[]}, {t:'lobby', p:[]}]) send(m);
+  }, aid);
+  await sleep(800);
+  const host = await H(h, ([aid,gid])=>({a:K.H.players[aid].role, g:K.H.players[gid].role, n:Object.values(K.H.players).filter(q=>q.role==='ghost').length, ph:K.H.phase}), [aid, gid]);
+  check(host.a==='surv' && host.g==='ghost' && host.n===1 && host.ph==='play', 'host roles changed '+JSON.stringify(host));
+  const lb = await rx(b);
+  const fake = lb.filter(m=>m.t==='s').some(m=>{ const e=m.p.find(e=>e.i===aid); return e && (e.f & ~0x247); });
+  check(!fake, 'spoofed flags reached another player');
+  check(await b.evaluate(aid=>K.P[aid].role==='surv', aid), 'b sees a as the ghost');
+  const bl = leaks(lb, gid).concat(await pageLeaks(b, gid));
+  check(!bl.length, 'leak after spoofing: '+bl.join(', '));
+  return 'ส่งบทบาท/flag/ข้อความปลอมแล้วโฮสต์ไม่เชื่อ';
+});
+
+T('disguise_rejoin', 'โหมดปลอมตัว: คนเข้าห้องกลางเกม คนหลุด และรอบใหม่ ไม่ทำให้ข้อมูลผีรั่ว', async ctx=>{
+  const ps = await room(ctx, 'RDRJ', 3);
+  const [h] = ps;
+  await H(h, ()=>K.hostSetMode('disguise'));
+  await start(ps); await skipWake(h);
+  let {gid, surv} = await ghostAndSurv(ps);
+  // someone tries to come in while the round is on
+  const x = await open(ctx, 'room=RDRJ', 'late');
+  await x.evaluate(()=>{ window.__rx=[]; const bc = new BroadcastChannel('krasue-local'); bc.onmessage = ev=>{ const m=ev.data; if(m.k==='d' && m.to===K.NET.me) window.__rx.push(m.m); }; });
+  await x.click('#joinBtn');
+  await until(x, ()=>/กำลังเล่นอยู่/.test(document.querySelector('#menuMsg').textContent), null, 8000, 'late joiner denied');
+  const lx = await rx(x);
+  check(lx.every(m=>m.t==='deny'), 'late joiner was sent '+lx.map(m=>m.t).join(','));
+  // a survivor drops out (the host never leaves here: that ends the room)
+  const leaver = surv.find(p=>p!==h);
+  let stay = ps.filter(p=>p!==leaver);
+  if(leaver){
+    for(const p of stay) await tap(p);
+    await leaver.evaluate(()=>K.leaveRoom());
+    await sleep(1200);
+    for(const p of stay.filter(p=>surv.includes(p))){ const l = leaks(await rx(p), gid).concat(await pageLeaks(p, gid)); check(!l.length, p.tag+' after a drop: '+l.join(', ')); }
+  }
+  // end the round at dawn and play again with who is left: the new ghost is secret again
+  if((await H(h, ()=>K.H.phase))==='play'){ await H(h, ()=>{ K.H.left = .05; }); }
+  await until(h, ()=>K.H.phase==='end', null, 5000, 'round over');
+  for(const p of stay) await tap(p);
+  await H(h, ()=>K.hostAgain());
+  await until(h, k=>K.H.lobby.length===k, stay.length, 3000, 'lobby again');
+  await start(stay); await skipWake(h); await sleep(800);
+  ({gid, surv} = await ghostAndSurv(stay));
+  for(const p of surv){ const l = leaks(await rx(p), gid).concat(await pageLeaks(p, gid)); check(!l.length, p.tag+' in round 2: '+l.join(', ')); }
+  return `เข้ากลางเกมถูกปฏิเสธ คนหลุดไม่ทำให้รั่ว รอบใหม่ ${stay.length} คนยังเป็นความลับ`;
+});
+
+T('disguise_salt', 'โหมดปลอมตัว: ปาเกลือใส่ผีปลอมตัว ร่างหลุดและทุกคนรู้ตัวผี', async ctx=>{
+  const ps = await room(ctx, 'RDSL', 3);
+  const [h] = ps;
+  await H(h, ()=>K.hostSetMode('disguise'));
+  await start(ps); await skipWake(h);
+  const {g, gid, surv} = await ghostAndSurv(ps);
+  const [a, b] = surv, aid = await me(a);
+  await place(h, g, 0, 17, 0); await place(h, a, 0, 19, 0); await place(h, b, -8, 21, Math.PI); await sleep(400);
+  check(await b.evaluate(gid=>K.P[gid].role==='surv', gid), 'b knew before the salt');
+  await H(h, id=>{ K.H.players[id].ch='salt'; }, aid);
+  await until(a, ()=>K.L.ch==='salt', null, 2000, 'salt in hand');
+  await a.evaluate(()=>K.useCharm());
+  await until(h, gid=>!K.H.players[gid].dis && K.H.players[gid].outed, gid, 2000, 'disguise burnt off');
+  await until(a, gid=>K.P[gid].role==='ghost' && /ร่างปลอมหลุด/.test(document.querySelector('#toast').textContent), gid, 3000, 'thrower sees who it was');
+  await until(b, gid=>K.P[gid] && K.P[gid].role==='ghost' && !(K.P[gid].flags&1024), gid, 3000, 'everyone is told once it is out');
+  return 'โดนเกลือแล้วร่างหลุด คนปารู้และทุกคนได้ข้อมูลผีหลังเผยร่าง';
 });
 
 T('disguise_morph', 'โหมดปลอมตัว: กลายร่าง ออกล่า กลับร่าง', async ctx=>{

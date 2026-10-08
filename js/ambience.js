@@ -266,6 +266,16 @@ const CROWS = [];
   }
   black.side = THREE.DoubleSide;
 }
+K.CROW_HOMES = CROWS.map(c=>({x:c.home.x, z:c.home.z}));
+K.crowState = i => CROWS[i] && CROWS[i].st;   // for the tests
+/* disguise mode: the host says when the hidden ghost walks up to a perch. They fly from whoever stands closest */
+K.crowFlee = function(i){
+  const c = CROWS[i]; if(!c || c.st!=='perch') return;
+  let near = c.home, d = 1e9;
+  for(const v of Object.values(P)){ const p = v.id===K.NET.me ? L.pos : v.pos, e = Math.hypot(p.x-c.home.x, p.z-c.home.z); if(e<d){ d = e; near = p; } }
+  for(const o of CROWS) if(o.st==='perch' && o.home.distanceTo(c.home)<3) flush(o, near);
+  if(K.gameTime-crowSfxAt>.6){ crowSfxAt = K.gameTime; const at = {x:c.home.x, y:c.home.y+.5, z:c.home.z}; K.sfx.flap(K.at(at)); K.sfx.caw(K.at(at)); }
+};
 function resetCrow(c){
   c.st = 'perch'; c.t = 0; c.g.visible = true;
   c.g.position.copy(c.home).add(tmpV.set(R(-.2,.2),0,R(-.1,.1))); c.g.rotation.set(0,R(0,6.3),0);
@@ -349,7 +359,7 @@ K.updateAmbience = function(dt){
   for(const w of WISPS){ const a = t*w.sp+w.ph; w.s.position.set(w.cx+Math.cos(a)*w.r, w.y+Math.sin(t*1.3+w.ph)*.25, w.cz+Math.sin(a*1.3)*w.r); w.s.material.opacity = .5+.5*Math.sin(t*3+w.ph); }
   // lightning
   LT.next -= dt;
-  if(LT.next<=0){ LT.next = G.inGame ? mr(40,90) : mr(12,26); strike(); }
+  if(LT.next<=0){ LT.next = G.inGame ? mr(40,90) : mr(12,26); if(!(G.inGame && G.mode==='disguise')) strike(); }   // a disguise round's lightning comes from the host (it shows the ghost's eyes)
   if(LT.t>=0){ LT.t += dt; if(LT.t>.5) LT.t = -1; }
   const fl = flashLevel();
   K.amb.intensity = (K.ambBase||.55) + fl*1.6;
