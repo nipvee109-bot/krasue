@@ -253,6 +253,13 @@ K.updateRemotes = function(dt){
       g.visible = !gone;
       if(v.spirit){ v.spirit.g.visible = gone && iAmSpect && v.s==='dead'; v.spirit.g.position.set(v.pos.x, v.pos.y-1.2+Math.sin(t*1.3+v.pos.x)*.1, v.pos.z); }
       const crouched = (v.flags&512) && v.s==='alive';
+      // the sound of being fed on carries
+      if(v.s==='down' && v.fn>(v.lastFn||0)+.001 && K.A.ctx){
+        v.chewT = (v.chewT||0) - dt;
+        const gv = K.ghostView();
+        if(v.chewT<=0 && gv){ v.chewT = mr(.55,.8); const o = K.at(gv.pos); if(G.gk==='pop') K.sfx.chew(o); else if(G.gk==='krasue') K.sfx.slurp(o); else K.sfx.suck(o); }
+      }
+      v.lastFn = v.fn;
       g.scale.y = lerp(g.scale.y, crouched ? .66 : 1, Math.min(1, dt*9));
       if(v.s==='down'){ g.position.set(v.pos.x,.15,v.pos.z); g.rotation.set(-Math.PI/2,v.yaw,0,'YXZ'); }
       else { g.position.set(v.pos.x,0,v.pos.z); g.rotation.set(0,v.yaw,0); }
@@ -357,6 +364,8 @@ K.updateAudio = function(dt){
   A.humGain.gain.value = (g.flags&8) || G.ph==='wake' ? 0 : .22;
   for(const k in A.hum) A.hum[k].gain.value = k===G.gk ? 1 : 0;
   if(me.s!=='alive' && me.s!=='down') return;
+  if(me.s==='down' && me.fn>(L.lastFn||0)+.001){ L.chewT = (L.chewT||0)-dt; if(L.chewT<=0){ L.chewT = mr(.5,.75); const o = K.at(g.pos); if(G.gk==='pop') K.sfx.chew(o); else if(G.gk==='krasue') K.sfx.slurp(o); else K.sfx.suck(o); } }
+  L.lastFn = me.fn;
   const d = Math.hypot(g.pos.x-L.pos.x, g.pos.z-L.pos.z);
   if(d<CFG.terror && G.ph==='play'){
     heartT -= dt;

@@ -87,6 +87,7 @@ function strike(){
   const d = mr(.6,2.6);
   setTimeout(()=>K.sfx.thunder && K.sfx.thunder(), d*1000);
 }
+K.strike = strike;
 function flashLevel(){
   if(LT.t<0) return 0;
   for(const [a,b] of LT.seq) if(LT.t>=a && LT.t<=b) return 1;
@@ -115,6 +116,18 @@ function trySpawnFigure(){
   fig.g.position.set(x,0,z); fig.g.lookAt(L.pos.x,0,L.pos.z); fig.g.rotateY(Math.PI);
   fig.g.visible = true; fig.t = mr(1.6,2.6); fig.lit = 0; fig.m.opacity = .85;
 }
+/* sometimes the lightning shows a figure out there that is gone in the next flash */
+function flashFigure(){
+  const me = P[K.NET.me];
+  if(!G.inGame || !me || me.role!=='surv' || me.s!=='alive' || G.ph!=='play' || fig.g.visible || Math.random()>.4) return;
+  const g = K.ghostView(); if(g && g.pos.distanceTo(L.pos)<22) return;   // the real one is near: let it be the one you see
+  const a = L.yaw + mr(-.35,.35), d = mr(16,22), x = L.pos.x - Math.sin(a)*d, z = L.pos.z - Math.cos(a)*d;
+  if(Math.abs(x)>23 || Math.abs(z)>23) return;
+  const p = new V3(x,0,z); K.collide(p,.4,{}); if(p.distanceTo(new V3(x,0,z))>.05) return;
+  if(!K.lineOfSight(L.pos.x,1.6,L.pos.z,x,1.3,z)) return;
+  fig.g.position.set(x,0,z); fig.g.lookAt(L.pos.x,0,L.pos.z); fig.g.rotateY(Math.PI);
+  fig.g.visible = true; fig.t = .38; fig.lit = 0; fig.m.opacity = .85; fig.quiet = true;
+}
 function updateFigure(dt){
   fig.next -= dt;
   if(fig.next<=0){ fig.next = mr(55,110); trySpawnFigure(); }
@@ -125,6 +138,7 @@ function updateFigure(dt){
   if(L.light && f.dot(to)>.97) fig.lit += dt;
   if(fig.t<=0 || d<7 || fig.lit>.25 || !G.inGame){
     fig.g.visible = false;
+    if(fig.quiet){ fig.quiet = false; return; }
     if(G.inGame){ K.sfx.haunt(K.at({x:fig.g.position.x,y:1.4,z:fig.g.position.z})); if(fig.lit>.25 || d<7) K.sfx.sting(); }
   }
 }
@@ -161,6 +175,10 @@ K.updateAmbience = function(dt){
   K.moonLight.intensity = (K.moonBase||.3) + fl*1.4;
   if(fl){ tmpC.copy(K.scene.fog.color).lerp(FLASH_COL,.7); K.scene.background.copy(tmpC); }
   else K.scene.background.copy(K.scene.fog.color);
+  // the flash thins the fog: for a blink you see the whole temple, and whatever is standing in it
+  if(K.baseFogD) K.scene.fog.density = K.baseFogD * (fl ? .32 : 1);
+  if(fl && !LT.shown){ LT.shown = true; flashFigure(); }
+  if(LT.t<0) LT.shown = false;
   // dread: darker edges, heavier grain, a flickering torch when the ghost is close
   let fear = 0;
   const me = P[K.NET.me], g = K.ghostView();

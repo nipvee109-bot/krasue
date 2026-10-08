@@ -122,6 +122,10 @@ K.sfx = {
   step:(out,v)=>noise(.09,v||.18,out,'lowpass',mr(500,800),200,1),
   stomp:(out,v)=>{ noise(.22,v||.35,out,'lowpass',mr(260,340),70,2); tone('sine',mr(58,66),32,.25,(v||.35)*.7,out); },
   breath:out=>{ noise(.7,.16,out,'bandpass',900,420,2.5); noise(.9,.12,out,'bandpass',520,300,2.5,.85); },
+  /* feeding, one per ghost */
+  chew:out=>{ for(let i=0;i<3;i++){ noise(.12,.3,out,'bandpass',mr(280,520),180,3,i*.18); tone('sine',mr(70,90),40,.12,.12,out,i*.18); } },
+  slurp:out=>{ noise(.6,.22,out,'bandpass',380,1700,4); tone('sine',300,900,.5,.04,out); },
+  suck:out=>{ tone('sine',1700,2500,.7,.05,out); noise(.7,.08,out,'highpass',3500,5000,2); },
   drag:(out,v)=>noise(.5,v||.12,out,'bandpass',mr(500,700),250,2),
   heart:v=>{ tone('sine',58,40,.16,v); tone('sine',52,36,.14,v*.8,null,.22); },
   giggle:out=>{ for(let i=0;i<5;i++){ const f=mr(780,980)-i*30; tone('triangle',f,f*.92,.11,.12,out,i*.16); noise(.08,.04,out,'bandpass',2600,2400,6,i*.16); } },
