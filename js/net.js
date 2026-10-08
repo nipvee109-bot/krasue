@@ -35,7 +35,7 @@ class LocalPeer extends Emitter{
   }
   _recv(m){
     let c = this.conns[m.from];
-    if(m.k==='c'){ c = new LocalConn(this, m.from); this.conns[m.from]=c; c.open=true; this.emit('connection', c); bc.postMessage({k:'a', from:this.id, to:m.from}); setTimeout(()=>c.emit('open'),0); }
+    if(m.k==='c'){ c = new LocalConn(this, m.from); this.conns[m.from]=c; c.open=true; this.emit('connection', c); c.emit('open'); bc.postMessage({k:'a', from:this.id, to:m.from}); }   // open our end before acking, so the joiner's first message never beats it
     else if(m.k==='a' && c){ c.open = true; c.emit('open'); }
     else if(m.k==='d' && c && c.open){ c.emit('data', m.m); }
     else if(m.k==='x' && c){ c.open=false; delete this.conns[m.from]; c.emit('close'); }
@@ -55,7 +55,7 @@ K.broadcast = function(m){ for(const id in NET.conns){ const c=NET.conns[id]; if
 K.sendTo = function(id,m){ if(id===NET.me) K.clientRecv(m); else { const c=NET.conns[id]; if(c && c.open) c.send(m); } };
 
 K.hostCreate = function(){
-  if(!K.peerReady()) return;
+  if(NET.peer || !K.peerReady()) return;   // already hosting or joining: a second click must not open a second session
   K.audioInit();
   const name = K.myName();
   K.menuMsg('กำลังสร้างห้อง...');
@@ -72,14 +72,15 @@ K.hostCreate = function(){
     conn.on('close', ()=>K.hostDrop(conn.peer));
     conn.on('error', ()=>K.hostDrop(conn.peer));
   });
-  peer.on('disconnected', ()=>{ if(!peer.destroyed) peer.reconnect(); });
+  // destroy() fires 'disconnected' before marking itself destroyed, so decide once it has settled: only a live room reconnects
+  peer.on('disconnected', ()=>setTimeout(()=>{ if(NET.peer===peer && !peer.destroyed) peer.reconnect(); }, 0));
   peer.on('error', err=>{
-    if(err.type==='unavailable-id'){ peer.destroy(); K.hostCreate(); return; }
+    if(err.type==='unavailable-id'){ peer.destroy(); NET.peer = null; K.hostCreate(); return; }
     if(!NET.isHost){ K.menuMsg('สร้างห้องไม่สำเร็จ ('+err.type+') ลองใหม่อีกครั้ง', true); K.teardown(); }
   });
 };
 K.joinRoom = function(){
-  if(!K.peerReady()) return;
+  if(NET.peer || !K.peerReady()) return;
   const code = K.codeIn.value.trim().toUpperCase();
   if(code.length!==4){ K.menuMsg('ใส่รหัสห้อง 4 ตัวที่เพื่อนส่งมา', true); K.codeIn.focus(); return; }
   K.audioInit();
@@ -87,7 +88,7 @@ K.joinRoom = function(){
   K.menuMsg('กำลังเข้าห้อง '+code+'...');
   const peer = NET.peer = K.newPeer();
   let opened = false;
-  const timer = setTimeout(()=>{ if(!opened){ K.menuMsg('เชื่อมต่อห้อง '+code+' ไม่ได้ (เน็ตบางแห่งบล็อกการเชื่อมต่อแบบ P2P)', true); K.teardown(); } }, 15000);
+  const timer = setTimeout(()=>{ if(!opened && NET.peer===peer){ K.menuMsg('เชื่อมต่อห้อง '+code+' ไม่ได้ (เน็ตบางแห่งบล็อกการเชื่อมต่อแบบ P2P)', true); K.teardown(); } }, 15000);
   peer.on('open', id=>{
     NET.me = id; NET.code = code;
     const conn = peer.connect(K.PREFIX+code, {reliable:true, serialization:'json'});
@@ -96,6 +97,7 @@ K.joinRoom = function(){
     conn.on('close', ()=>{ if(NET.host===conn) K.hostGone(); });
   });
   peer.on('error', err=>{
+    if(NET.peer!==peer) return;
     clearTimeout(timer);
     if(err.type==='peer-unavailable') K.menuMsg('ไม่พบห้อง '+code+' เช็ครหัสอีกครั้ง หรือให้เพื่อนสร้างห้องใหม่', true);
     else if(NET.host) return;

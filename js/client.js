@@ -15,7 +15,14 @@ const masked = v => !!v && v.role==='ghost' && (v.flags&1024) && !(v.flags&2048)
 K.masked = masked;
 K.voiceIds = () => G.inGame ? Object.keys(P).filter(i=>i!=='bot') : (K.LOBBY ? K.LOBBY.p.map(p=>p.i) : []);
 
+/* a host that goes quiet (tab asleep, network gone) only closes the link after ~30 s: say so instead of a silent frozen world */
+let lastFromHost = performance.now();
+setInterval(()=>{
+  if(!G.inGame || K.NET.isHost || G.ph==='end' || !K.NET.host) return;
+  if(performance.now()-lastFromHost > 4000) K.toast('สัญญาณจากโฮสต์ขาดหาย กำลังรอเชื่อมต่อ...', 1.5);
+}, 1000);
 K.clientRecv = function(m){
+  lastFromHost = performance.now();
   switch(m.t){
     case 'lobby': K.onLobby(m); break;
     case 'gt': G.myGt = m.k; K.renderGhostPick && K.renderGhostPick(); break;
@@ -109,7 +116,7 @@ function onStart(m){
   if(G.role!=='ghost') G.disg = false;
   if(G.disg) L.light = true;
   L.pos.set(me.pos.x, 0, me.pos.z); L.yaw = me.yaw; L.pitch = 0;
-  L.battery = 100; L.stamina = 100; L.exhausted = false; L.light = G.role==='surv'; L.escSent = false; L.lungeUntil = 0; L.boostUntil = 0;
+  L.battery = 100; L.stamina = 100; L.exhausted = false; L.light = G.role==='surv' || G.disg;   // a disguised ghost lines up with its torch on like everyone L.escSent = false; L.lungeUntil = 0; L.boostUntil = 0;
   L.sc = null; L.ch = ''; L.of = -1; L.flyY = 3; L.autoHold = null; L.crouch = false; L.eyeH = CFG.eye;
   if(K.resetProps) K.resetProps();
   document.body.classList.toggle('ghost', G.role==='ghost');
@@ -192,7 +199,7 @@ function onSnap(m){
     if(o.i!==K.NET.me){ v.tpos.set(o.x,o.y,o.z); v.tyaw=o.a; v.tpitch=o.b; }
     else {
       if(prev!==v.s) onMyState(prev, v.s);
-      if(G.role==='ghost' && G.mode==='disguise'){ const d = !!(v.flags&1024) && !(v.flags&2048); if(d!==G.disg){ G.disg = d; if(d) L.light = false; K.setVision(); K.setRoleClass(); } }
+      if(G.role==='ghost' && G.mode==='disguise'){ const d = !!(v.flags&1024) && !(v.flags&2048); if(d!==G.disg){ G.disg = d; if(d) L.light = L.battery>0; K.setVision(); K.setRoleClass(); } }
       if(v.ch!==L.ch || v.of!==L.of){ L.ch = v.ch; L.of = v.of; refreshHand(); }
     }
   }

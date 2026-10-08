@@ -103,7 +103,7 @@ K.hostRecv = function(id, m){
       return;
     }
     case 'pick': {
-      if(!p || p.role!=='surv' || p.s!=='alive' || H.phase==='end') return;
+      if(!p || !(p.role==='surv' || (p.dis && m.k==='bat')) || p.s!=='alive' || H.phase==='end') return;   // a disguised ghost may take batteries, nothing else
       if(m.k==='bat'){
         const b = H.bats[m.i]; const s = K.BAT_SPOTS[m.i];
         if(b==null || b>0 || !near(p,s[0],s[1])) return;

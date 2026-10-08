@@ -26,6 +26,7 @@ K.findTarget = function(){
     for(const v of Object.values(P)) if(v.id!==K.NET.me && v.role==='surv' && v.s==='down') consider(v.pos.x,v.pos.z,{k:'revive',i:v.id},1.9);
   } else if(me.role==='ghost' && G.disg){
     for(const c of R.cand) if(!c.lit) consider(c.x,c.z,{k:'candle',i:c.i},1.9);   // pretend to help: the flame never grows
+    for(const b of K.BAT) if(b.up) consider(b.x,b.z,{k:'bat',i:b.i},1.7);       // and keep its torch alive like a person would
   } else if(me.role==='ghost' && !(me.flags&16)){
     for(const v of Object.values(P)) if(v.role==='surv' && v.s==='down') consider(v.pos.x,v.pos.z,{k:'finish',i:v.id},2.2);
   }

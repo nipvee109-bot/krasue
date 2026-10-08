@@ -7,17 +7,21 @@ const V = K.voice = {stream:null, track:null, muted:K.store.get('muted', false),
 
 V.start = async function(){
   if(V.asked) return; V.asked = true;
+  const gen = V.gen = (V.gen||0)+1;
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ V.denied = true; V.why = 'insecure'; K.onVoiceState && K.onVoiceState(); return; }
   try{
-    V.stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:true, autoGainControl:true}, video:false});
+    const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:true, autoGainControl:true}, video:false});
+    if(gen!==V.gen){ for(const t of stream.getTracks()) t.stop(); return; }   // left the room while the prompt was up
+    V.stream = stream;
     V.track = V.stream.getAudioTracks()[0];
     V.track.enabled = !V.muted;
     for(const id in V.pcs) attachTrack(V.pcs[id]);
     if(K.A.ctx){ V.src = K.A.ctx.createMediaStreamSource(V.stream); V.an = K.A.ctx.createAnalyser(); V.an.fftSize = 256; V.buf = new Uint8Array(V.an.fftSize); V.src.connect(V.an); }
-  }catch(e){ V.denied = true; V.why = e && e.name || 'denied'; }
+  }catch(e){ if(gen!==V.gen) return; V.denied = true; V.why = e && e.name || 'denied'; }
   K.onVoiceState && K.onVoiceState();
 };
 V.stop = function(){
+  V.gen = (V.gen||0)+1;
   for(const id in V.pcs) closePc(id);
   if(V.stream) for(const t of V.stream.getTracks()) t.stop();
   V.stream = null; V.track = null; V.asked = false; V.denied = false; V.src = null; V.an = null;
@@ -107,7 +111,7 @@ function voiceGain(me, s){
   if(!K.G.inGame || K.G.ph==='end') return [1,0];
   if(!me || !s) return [0,0];
   const spect = v => v.s==='dead' || v.s==='escaped';
-  if(s.role==='ghost') return K.masked(s) ? [0,1] : [0,0];   // in disguise it talks like anyone else
+  if(s.role==='ghost') return K.masked(s) && !spect(me) ? [0,1] : [0,0];   // in disguise it talks like anyone else (to the living)
   if(spect(s)) return spect(me) ? [1,0] : [0,0];
   if(spect(me)) return [0,0];
   return [0,1];
